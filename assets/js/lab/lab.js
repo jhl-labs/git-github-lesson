@@ -293,6 +293,22 @@ class GitLabView {
       ),
     );
     this.celebrate = null;
+    this.#revealCurrentStep();
+  }
+
+  /** 진행 중인 단계(또는 완료 안내)가 미션 패널 안에 보이도록 패널 내부만 스크롤한다. */
+  #revealCurrentStep() {
+    const panel = this.missionPanel;
+    const target = panel.querySelector('.mission-complete, .mission-step.is-current');
+    if (!target || panel.scrollHeight <= panel.clientHeight) return;
+    const tabsHeight = panel.querySelector('.mission-tabs')?.offsetHeight ?? 0;
+    const top = target.getBoundingClientRect().top - panel.getBoundingClientRect().top + panel.scrollTop;
+    const bottom = top + target.offsetHeight;
+    const viewTop = panel.scrollTop + tabsHeight;
+    const viewBottom = panel.scrollTop + panel.clientHeight;
+    if (top < viewTop || bottom > viewBottom) {
+      panel.scrollTo({ top: Math.max(0, top - tabsHeight - 12), behavior: 'smooth' });
+    }
   }
 
   async #runAction(action) {

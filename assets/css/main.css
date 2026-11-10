@@ -663,12 +663,16 @@ svg {
   border: 1px solid var(--line);
   color: var(--muted);
 }
+/* 복사 버튼은 언어 라벨처럼 코드 블록 윗 테두리에 걸쳐 둔다.
+   코드 영역 위에 겹치지 않으므로 긴 줄이 가로 스크롤되어도 버튼 밑으로 파고들지 않는다. */
 .copy-btn {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.07);
+  top: 0;
+  right: 12px;
+  transform: translateY(-50%);
+  z-index: 1;
+  border: 1px solid #000;
+  background: #2a2e36;
   color: #d6d3cc;
   border-radius: 7px;
   font: 600 12px var(--font);
@@ -699,6 +703,7 @@ svg {
 }
 .prompt-head .copy-btn {
   position: static;
+  transform: none;
   margin-left: auto;
   background: var(--accent);
   border-color: var(--accent);
@@ -821,6 +826,11 @@ svg {
   padding: 0 0 18px 48px;
   margin: 0 !important;
 }
+/* 단계 설명 바로 아래 코드 블록: 윗 테두리에 걸친 언어 라벨·복사 버튼이 글자에 닿지 않게 띄운다. */
+.steps > li > .code-block,
+.steps > li > .shot {
+  margin-top: 16px;
+}
 .steps > li::before {
   content: counter(step);
   position: absolute;
@@ -853,12 +863,31 @@ svg {
   line-height: 32px;
 }
 
+/* 복사 버튼 없는 일반 코드 블록(디렉터리 트리, 예시 JSON 등) */
+.prose pre[data-nocopy] {
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  background: var(--bg-sunk);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  line-height: 1.6;
+  font-size: 13.2px;
+}
+.card pre[data-nocopy] {
+  margin: 0;
+  font-size: 12.6px;
+}
+
 /* ── 카드 그리드 ──────────────────────────────────── */
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 14px;
   margin: 0 0 24px;
+}
+.cards:has(> :nth-child(4):last-child) {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 .card {
   background: var(--bg-elev);
@@ -927,11 +956,14 @@ a.card:hover {
   flex-wrap: wrap;
   gap: 10px;
 }
+.hero {
+  padding-right: 250px;
+}
 .hero-graph {
   position: absolute;
-  right: -20px;
+  right: -10px;
   top: 10px;
-  width: 300px;
+  width: 260px;
   opacity: 0.9;
   pointer-events: none;
 }
@@ -2074,6 +2106,35 @@ a.card:hover {
 /* ==========================================================================
    반응형
    ========================================================================== */
+/* 넓은 화면: 세 칸(미션·터미널·시각화)을 한 화면 높이의 작업대로 고정하고
+   각 칸은 내부에서만 스크롤한다. 제목 영역(약 300px)을 빼도 1080p에서 한눈에 들어온다. */
+@media (min-width: 1501px) {
+  .lab-grid {
+    --lab-h: clamp(540px, calc(100vh - var(--topbar-h) - 260px), 860px);
+    height: var(--lab-h);
+    align-items: stretch;
+  }
+  .lab-missions,
+  .lab-term,
+  .lab-viz {
+    position: static;
+    height: 100%;
+    max-height: none;
+    min-height: 0;
+  }
+  .lab-viz {
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+}
+@media (min-width: 1600px) {
+  .page:not(.page-wide) {
+    grid-template-columns: minmax(0, 880px) 240px;
+  }
+  .page:not(.page-wide):not(:has(.toc)) {
+    grid-template-columns: minmax(0, 880px);
+  }
+}
 @media (max-width: 1500px) {
   .lab-grid {
     grid-template-columns: 310px minmax(0, 1fr);
@@ -2099,6 +2160,9 @@ a.card:hover {
   }
 }
 @media (max-width: 1180px) {
+  .cards:has(> :nth-child(4):last-child) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .page {
     grid-template-columns: minmax(0, 760px) !important;
   }
@@ -2182,6 +2246,9 @@ a.card:hover {
 @media (max-width: 640px) {
   body {
     font-size: 16px;
+  }
+  .cards:has(> :nth-child(4):last-child) {
+    grid-template-columns: minmax(0, 1fr);
   }
   .page {
     padding: 24px 16px 60px;
