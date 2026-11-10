@@ -189,9 +189,13 @@ export function renderVisualizer(snap, { onOpenFile, vfs }) {
 
 function renderGitHub(snap) {
   const body = el('div', { class: 'gh-repos' });
-  for (const r of snap.github) {
+  // 지금 있는 저장소의 origin을 맨 위에 보여 준다 (여러 GitHub 저장소가 있을 때 헷갈리지 않도록)
+  const origin = snap.repo?.remotes?.find((r) => r.name === 'origin')?.display;
+  const repos = [...snap.github].sort((a, b) => (b.url === origin) - (a.url === origin));
+  for (const r of repos) {
     const refs = Object.entries(r.branches).map(([name, sha]) => ({ sha, text: name, kind: 'remote' }));
-    body.append(el('div', { class: 'gh-repo' }, el('div', { class: 'gh-url' }, el('code', {}, r.url)), r.order.length ? renderGraph({ order: r.order, commits: r.commits, refs }) : el('p', { class: 'viz-empty' }, '빈 저장소 — git push 를 기다리는 중')));
+    const url = el('div', { class: 'gh-url' }, el('code', {}, r.url), r.url === origin ? el('span', { class: 'ref-chip ref-remote' }, '이 저장소의 origin') : '');
+    body.append(el('div', { class: 'gh-repo' }, url, r.order.length ? renderGraph({ order: r.order, commits: r.commits, refs }) : el('p', { class: 'viz-empty' }, '빈 저장소 — git push 를 기다리는 중')));
   }
   return area('remote', '가상 GitHub', 'Remote · 인터넷 너머의 공유 저장소', body);
 }

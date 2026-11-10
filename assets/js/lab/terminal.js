@@ -4,7 +4,7 @@
  */
 import { el } from '../ui/dom.js';
 
-const GIT_SUBCOMMANDS = ['add', 'branch', 'checkout', 'clone', 'commit', 'config', 'diff', 'fetch', 'help', 'init', 'log', 'merge', 'pull', 'push', 'remote', 'reset', 'restore', 'rm', 'show', 'status', 'switch', 'tag'];
+const GIT_SUBCOMMANDS = ['add', 'branch', 'checkout', 'clone', 'commit', 'config', 'diff', 'fetch', 'help', 'init', 'log', 'merge', 'pull', 'push', 'remote', 'reset', 'restore', 'revert', 'rm', 'show', 'status', 'switch', 'tag'];
 const SHELL_COMMANDS = ['cat', 'cd', 'clear', 'echo', 'edit', 'git', 'help', 'history', 'ls', 'mkdir', 'mv', 'pwd', 'rm', 'touch', 'tree'];
 
 export class TerminalView {

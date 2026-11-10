@@ -12,6 +12,7 @@ import { Shell } from './shell.js';
 
 const GITHUB_OWNER = 'student';
 const GITHUB_REPO = 'my-project';
+const TEAM_URL = 'https://github.com/team/web-app.git';
 const BASE_GITCONFIG = '[init]\n\tdefaultBranch = main\n';
 
 export class LabSession {
@@ -115,6 +116,57 @@ export class LabSession {
       { text: '✅ ~/conflict-lab 저장소를 만들고 이동했어요.', kind: 'ok' },
       { text: '   main 브랜치: 점심 메뉴를 "비빔밥"으로 변경', kind: 'info' },
       { text: '   feature/menu 브랜치: 같은 줄을 "돈가스"로 변경', kind: 'info' },
+    ];
+  }
+
+  get teamUrl() {
+    return TEAM_URL;
+  }
+
+  /** 동료 작업 공간을 만들어 GitHub 저장소를 clone 하고 신원을 설정한다 */
+  async #teammateWorkspace(url, name, email) {
+    const dir = `/teammates/${email.split('@')[0]}`;
+    if (this.vfs.exists(dir)) this.vfs.remove(dir);
+    this.vfs.mkdirp(dir);
+    await this.#quiet(`git clone ${url} work`, dir);
+    const work = `${dir}/work`;
+    this.vfs.write(`${work}/.git/config`, this.vfs.readOr(`${work}/.git/config`, '') + `[user]\n\tname = ${name}\n\temail = ${email}\n`);
+    return work;
+  }
+
+  /** 팀 프로젝트 미션: 동료들이 커밋을 쌓아 둔 GitHub 저장소(team/web-app)를 준비 */
+  async prepareTeamRepo() {
+    const remote = this.github.toLocal(TEAM_URL);
+    if (!this.github.exists(remote)) await this.github.createRepo('team', 'web-app');
+    if (!this.reader.resolveRef(remote, 'refs/heads/main')) {
+      const work = await this.#teammateWorkspace(TEAM_URL, '박팀장', 'lead@example.com');
+      this.vfs.write(`${work}/README.md`, '# 우리 팀 웹사이트\n\n- 브랜치에서 작업하고 PR로 합칩니다\n');
+      await this.#quiet('git add README.md && git commit -m "프로젝트 시작"', work);
+      this.vfs.write(`${work}/index.html`, '<h1>환영합니다</h1>\n');
+      await this.#quiet('git add index.html && git commit -m "첫 화면 추가"', work);
+      await this.#quiet('git push -u origin main', work);
+    }
+    this.#notify();
+    return [
+      { text: `✅ GitHub에 팀 저장소 ${TEAM_URL} 이 준비됐어요.`, kind: 'ok' },
+      { text: '   박팀장 님이 커밋 2개(README.md, index.html)를 올려 둔 상태입니다. 이제 clone 해서 참여해 보세요.', kind: 'info' },
+    ];
+  }
+
+  /** 팀 프로젝트 미션: 내가 브랜치에서 일하는 동안 동료가 main에 push */
+  async teamMainPush() {
+    const remote = this.github.toLocal(TEAM_URL);
+    if (!this.reader.resolveRef(remote, 'refs/heads/main')) {
+      return [{ text: '⚠️ 먼저 "팀 저장소 준비하기" 버튼을 눌러 주세요.', kind: 'err' }];
+    }
+    const work = await this.#teammateWorkspace(TEAM_URL, '이동료', 'mate@example.com');
+    this.vfs.write(`${work}/style.css`, 'body { font-family: sans-serif; }\n');
+    await this.#quiet('git add style.css && git commit -m "기본 스타일 추가 (이동료)" && git push', work);
+    this.flags.teamMainPushed = true;
+    this.#notify();
+    return [
+      { text: '👥 이동료 님이 style.css를 추가해 GitHub의 main에 push 했어요.', kind: 'ok' },
+      { text: '   내 컴퓨터는 아직 이 사실을 몰라요. git fetch 로 소식을 받아 오세요.', kind: 'info' },
     ];
   }
 

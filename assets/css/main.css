@@ -771,6 +771,57 @@ svg {
   border-color: transparent;
 }
 
+/* ── 시작 전 이론 박스 / 요약 박스 ───────────────────
+   <section class="theory"><h2>📚 시작 전 이론</h2> ... <div class="theory-check">…</div></section>
+   각 Step 맨 위에서 "실습 전에 알아야 할 개념"을 한 덩어리로 묶는다. */
+.theory {
+  margin: 8px 0 36px;
+  padding: 22px 24px 8px;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--c-repo) 30%, var(--line));
+  background: linear-gradient(180deg, var(--c-repo-soft), var(--bg-elev) 220px);
+  box-shadow: var(--shadow);
+}
+.prose .theory > h2 {
+  margin-top: 0;
+}
+.prose .theory h3 {
+  margin-top: 22px;
+}
+.theory-terms {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  margin: 0 0 18px;
+}
+.theory-terms > div {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+}
+.theory-terms dt,
+.theory-terms b:first-child {
+  font-weight: 800;
+}
+.theory-terms dd {
+  margin: 4px 0 0;
+  color: var(--ink-2);
+  font-size: 14.5px;
+  line-height: 1.6;
+}
+.theory-check {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elev);
+  border: 1px dashed var(--line-strong);
+  font-size: 14.5px;
+}
+.theory-check > :last-child {
+  margin-bottom: 0;
+}
+
 /* ── 스크린샷 ─────────────────────────────────────── */
 .shot {
   margin: 0 0 24px;
@@ -1284,7 +1335,7 @@ a.card:hover {
 }
 .mission-tabs {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(9, minmax(0, 1fr));
   gap: 4px;
   padding: 10px;
   border-bottom: 1px solid var(--line);
@@ -1497,6 +1548,7 @@ a.card:hover {
   font-size: 12.5px;
 }
 .lab-toolbar .btn {
+  white-space: nowrap;
   color: #d6d3cc;
   border-color: #3a3f4a;
   min-height: 28px;
@@ -1635,9 +1687,108 @@ a.card:hover {
   background: rgba(255, 139, 123, 0.1);
 }
 
-/* 시각화 */
+/* 오른쪽 칸: 시각화(위) + 팁(아래) */
+.lab-side {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 .lab-viz {
   min-width: 0;
+}
+.lab-tips {
+  flex: none;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+}
+.lab-tips-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.lab-tips-head strong {
+  font-size: 13px;
+}
+.lab-tips-toggle {
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: 700 12px var(--font);
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.lab-tips.is-collapsed .lab-tips-body {
+  display: none;
+}
+.lab-tips.is-collapsed .lab-tips-head {
+  border-bottom: 0;
+}
+.lab-tips-body {
+  padding: 8px 12px 10px;
+}
+.tip-ref {
+  margin: 0 0 8px;
+  display: grid;
+  gap: 5px;
+}
+.tip-ref > div {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 6px;
+}
+.tip-ref dt {
+  font-weight: 800;
+  color: var(--muted);
+  font-size: 12px;
+}
+.tip-ref dd {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.tip-chip {
+  font: 500 11.5px/1.5 var(--mono);
+  padding: 1px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--bg-sunk);
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tip-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.tip-keys {
+  margin: 0 0 6px;
+  color: var(--ink-2);
+  line-height: 1.9;
+  font-size: 12.5px;
+}
+.tip-keys code,
+.tip-keys kbd {
+  font-size: 11.5px;
+}
+.tip-more summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 12.5px;
+}
+.tip-more p {
+  margin: 6px 0 0;
+  color: var(--ink-2);
+  line-height: 1.6;
+  font-size: 12.5px;
 }
 .viz {
   display: flex;
@@ -1872,6 +2023,12 @@ a.card:hover {
 }
 .gh-repo + .gh-repo {
   margin-top: 10px;
+}
+.gh-url {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
 }
 .gh-url code {
   white-space: normal !important;
@@ -2108,23 +2265,42 @@ a.card:hover {
    ========================================================================== */
 /* 넓은 화면: 세 칸(미션·터미널·시각화)을 한 화면 높이의 작업대로 고정하고
    각 칸은 내부에서만 스크롤한다. 제목 영역(약 300px)을 빼도 1080p에서 한눈에 들어온다. */
-@media (min-width: 1501px) {
+@media (min-width: 1201px) {
+  /* --lab-h 는 lab.js 가 "화면에 남은 높이"로 계산해 넣는다(페이지 스크롤 없이 한 화면). */
   .lab-grid {
-    --lab-h: clamp(540px, calc(100vh - var(--topbar-h) - 260px), 860px);
-    height: var(--lab-h);
+    height: var(--lab-h, clamp(540px, calc(100vh - var(--topbar-h) - 200px), 900px));
     align-items: stretch;
+    grid-template-columns: 320px minmax(0, 1.15fr) minmax(0, 1fr);
   }
   .lab-missions,
   .lab-term,
-  .lab-viz {
+  .lab-side {
     position: static;
     height: 100%;
     max-height: none;
     min-height: 0;
   }
   .lab-viz {
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
     padding-right: 4px;
+  }
+  /* 실습실 페이지는 제목 영역을 압축해 작업대에 높이를 양보한다 */
+  .page-wide {
+    padding-top: 18px;
+  }
+  .page-wide .page-meta {
+    margin-bottom: 4px;
+  }
+  .page-wide .prose h1 {
+    font-size: 28px;
+    margin-bottom: 4px;
+  }
+  .page-wide .prose > .lede:not(.lab):not(.page-footer):not(.page-meta) {
+    font-size: 15px;
+    margin-bottom: 14px;
+    max-width: none;
   }
 }
 @media (min-width: 1600px) {
@@ -2135,14 +2311,42 @@ a.card:hover {
     grid-template-columns: minmax(0, 880px);
   }
 }
-@media (max-width: 1500px) {
+/* 노트북 폭(1201~1500px): 같은 3열 작업대를 좁은 칸으로 */
+@media (min-width: 1201px) and (max-width: 1500px) {
+  .lab-grid {
+    grid-template-columns: 260px minmax(0, 1fr) 320px;
+    gap: 10px;
+  }
+  .terminal {
+    font-size: 12.8px;
+  }
+  .viz-flow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .viz-arrow {
+    display: none;
+  }
+  .lab-toolbar .lab-hint {
+    display: none;
+  }
+  .lab-badge {
+    margin-right: auto;
+  }
+  /* 세로 공간이 좁으니 팁은 일정 높이까지만, 나머지는 시각화에 */
+  .lab-tips-body {
+    max-height: 190px;
+    overflow-y: auto;
+  }
+}
+@media (max-width: 1200px) {
   .lab-grid {
     grid-template-columns: 310px minmax(0, 1fr);
   }
   .lab-missions {
     grid-row: span 2;
   }
-  .lab-viz {
+  .lab-side {
     grid-column: 2;
   }
   .lab-viz .viz {
@@ -2231,7 +2435,7 @@ a.card:hover {
   .lab-missions {
     grid-row: auto;
   }
-  .lab-viz {
+  .lab-side {
     grid-column: auto;
   }
   .lab-missions,
@@ -2293,7 +2497,7 @@ a.card:hover {
     font-size: 22px;
   }
   .mission-tabs {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(9, minmax(0, 1fr));
   }
 }
 @media (prefers-reduced-motion: reduce) {

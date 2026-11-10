@@ -21,6 +21,7 @@
 | 단계 | `<ol class="steps"><li><strong>제목</strong> 설명</li></ol>` | 번호 타임라인 |
 | Git 실습실 | `<div data-git-lab></div>` (`data-mission="branch"`로 시작 미션 지정 가능) | |
 | 위젯 | `<div data-widget="hash-generator"></div>` | `assets/js/widgets/<이름>.js`의 `mount(node)` |
+| 시작 전 이론 | `<section class="theory"><h2>📚 시작 전 이론: …</h2> … <dl class="theory-terms"><div><dt>용어</dt><dd>설명</dd></div></dl> … <div class="theory-check">셀프 체크</div></section>` | 각 Step 맨 위, lede 바로 아래 |
 
 ## Git 미션 추가
 
@@ -32,3 +33,6 @@
 - `state.read(path)`, `state.flags`
 
 시나리오 준비가 필요하면 `LabSession`에 메서드를 추가하고 미션의 `setup.action`에 이름을 적는다.
+미션 도중 일어나는 외부 사건(예: 동료의 push)은 `extra: { label, action }`으로 버튼을 하나 더 둔다.
+
+미션을 바꾼 뒤에는 Node로 전체 미션을 끝까지 실행해 모든 단계가 통과하는지 확인한다(각 단계의 `cmds`를 순서대로 실행하고 `check`를 평가).

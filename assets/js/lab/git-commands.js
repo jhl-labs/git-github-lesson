@@ -70,6 +70,7 @@ export class GitCommands {
       merge: this.merge,
       restore: this.restore,
       reset: this.reset,
+      revert: this.revert,
       rm: this.rm,
       remote: this.remote,
       push: this.push,
@@ -186,8 +187,9 @@ export class GitCommands {
       ['변경 기록', 'status [-s] · add <파일|.> · commit -m "메시지" [-a] · diff [--staged]'],
       ['기록 보기', 'log [--oneline] [--all] [-n N] · show [커밋]'],
       ['브랜치', 'branch [이름] [-d 이름] · switch [-c] <브랜치> · checkout [-b] <브랜치> · merge <브랜치> [--abort]'],
-      ['되돌리기', 'restore <파일> · restore --staged <파일> · reset [--soft|--hard] <커밋> · rm <파일>'],
-      ['원격(GitHub)', 'remote add origin <url> · remote -v · push [-u origin main] · fetch · pull'],
+      ['이동', 'checkout <브랜치|커밋|HEAD~N> · checkout -- <파일> · switch main'],
+      ['되돌리기', 'restore [--staged] <파일> · reset [--soft|--mixed|--hard] <커밋> · revert <커밋> · rm <파일>'],
+      ['원격(GitHub)', 'clone <url> · remote add origin <url> · remote -v · push [-u origin <브랜치>] · fetch · pull · branch -a'],
       ['기타', 'tag <이름>'],
     ];
     return [
@@ -596,8 +598,11 @@ export class GitCommands {
     if (!first) throw new GitError('💡 사용법: git checkout <브랜치> 또는 git checkout -- <파일>');
     const isBranch = !!this.reader.readRefs(gitdir, 'refs/heads')[first] || !!this.reader.resolveRef(gitdir, `refs/remotes/origin/${first}`);
     if (!afterDashDash && isBranch) return this.#checkoutBranch(first, ctx);
-    if (!afterDashDash && /^[0-9a-f]{4,40}$/.test(first) && !this.vfs.exists(this.vfs.resolve(first, ctx.cwd))) {
-      const sha = await this.#resolveOrThrow(first, workdir);
+    // 브랜치도 파일도 아니면 커밋(해시·HEAD~2·태그 등)으로 해석 → detached HEAD
+    const commitSha = !afterDashDash && !this.vfs.exists(this.vfs.resolve(first, ctx.cwd)) ? await this.#revParse(first, workdir) : null;
+    if (commitSha) {
+      if (this.reader.isMerging(gitdir)) throw new GitError('error: you need to resolve your current index first');
+      const sha = commitSha;
       await this.#lg2OrThrow(['checkout', sha], workdir);
       this.vfs.write(`${gitdir}/HEAD`, sha + '\n');
       return {
@@ -605,7 +610,8 @@ export class GitCommands {
           line(`Note: switching to '${first}'.`),
           line(''),
           line("You are in 'detached HEAD' state.", 'err'),
-          line('💡 HEAD가 브랜치가 아닌 커밋을 직접 가리키고 있어요. 돌아가려면 git switch main', 'info'),
+          line(`HEAD is now at ${short(sha)} ${(await this.reader.commit(sha, workdir))?.message.split('\n')[0] ?? ''}`),
+          line('💡 HEAD가 브랜치가 아닌 커밋을 직접 가리키고 있어요(과거 구경 모드). 돌아가려면 git switch main', 'info'),
         ],
       };
     }
@@ -704,6 +710,68 @@ export class GitCommands {
     }
     const st = await this.reader.status(workdir);
     return { lines: st.unstaged.length ? [line('Unstaged changes after reset:'), ...st.unstaged.map((e) => line(`${e.code}\t${e.path}`))] : [] };
+  }
+
+  /**
+   * git revert <커밋>: 그 커밋이 바꾼 내용을 거꾸로 적용한 "새 커밋"을 만든다.
+   * lg2에 revert가 없어 파일 단위로 구현한다. 대상 커밋 이후 같은 파일이 다시 바뀌었으면
+   * (3-way 병합이 필요한 경우) 안전하게 중단한다.
+   */
+  async revert(args, ctx) {
+    const { workdir, gitdir } = this.#repo(ctx);
+    const { flags, positional } = parseArgs(args);
+    if (flags.has('--abort') || flags.has('--continue')) throw new GitError('💡 이 실습 환경의 revert는 충돌 없는 경우만 한 번에 처리해요. --abort/--continue 는 필요 없어요.');
+    const rev = positional[0];
+    if (!rev) throw new GitError('usage: git revert <commit>\n💡 예: git revert HEAD  (가장 최근 커밋을 되돌리는 새 커밋 만들기)');
+    this.#requireIdentity(gitdir);
+    const head = this.reader.readHead(gitdir);
+    if (head.unborn) throw new GitError('fatal: bad revision \'HEAD\'');
+    const st = await this.reader.status(workdir);
+    if (st.staged.length || st.unstaged.length || this.reader.isMerging(gitdir)) {
+      throw new GitError('error: your local changes would be overwritten by revert.\nhint: commit your changes or stash them to proceed.\n💡 먼저 변경 사항을 commit 하거나 restore 로 정리해 주세요.');
+    }
+    const sha = await this.#resolveOrThrow(rev, workdir);
+    const target = await this.reader.commit(sha, workdir);
+    if (target.parents.length > 1) throw new GitError(`error: commit ${short(sha)} is a merge but no -m option was given.\n💡 병합 커밋 되돌리기는 이 실습 환경에서 지원하지 않아요.`);
+    if (!target.parents.length) throw new GitError('💡 첫 커밋(root commit)은 되돌릴 부모가 없어요. 다른 커밋으로 연습해 보세요.');
+    const parent = target.parents[0];
+    const changes = (await this.#lg2OrThrow(['diff', '--name-status', parent, sha], workdir)).lines
+      .map((l) => l.text.split('\t'))
+      .filter((parts) => parts.length === 2)
+      .map(([, path]) => path);
+    const plan = [];
+    for (const path of changes) {
+      const [current, after, before] = await Promise.all([this.#blob(head.sha, path, workdir), this.#blob(sha, path, workdir), this.#blob(parent, path, workdir)]);
+      if (current !== after) {
+        throw new GitError(
+          [`error: could not revert ${short(sha)}... ${target.message.split('\n')[0]}`, `CONFLICT: ${path} 가 그 커밋 이후에 다시 수정되었어요.`, '💡 이 실습 환경에서는 충돌이 없는 revert만 지원해요. 가장 최근 커밋(HEAD)부터 되돌려 보세요.'].join('\n'),
+        );
+      }
+      plan.push({ path, before });
+    }
+    for (const { path, before } of plan) {
+      const abs = `${workdir}/${path}`;
+      if (before === null) this.vfs.remove(abs);
+      else this.vfs.write(abs, before);
+      await this.#lg2OrThrow(['add', path], workdir);
+    }
+    const subject = target.message.split('\n')[0];
+    await this.#lg2OrThrow(['commit', '-m', `Revert "${subject}"`], workdir);
+    const after = this.reader.readHead(gitdir).sha;
+    return {
+      lines: [
+        line(`[${head.branch ?? 'detached HEAD'} ${short(after)}] Revert "${subject}"`, 'ok'),
+        line(` ${plan.length} file${plan.length === 1 ? '' : 's'} changed`),
+        line('💡 기록을 지우지 않고 "되돌리는 새 커밋"을 쌓았어요. 이미 push 한 커밋은 reset 대신 revert 로 되돌립니다.', 'info'),
+      ],
+    };
+  }
+
+  /** 커밋 안의 파일 내용(없으면 null) */
+  async #blob(sha, path, workdir) {
+    const r = await this.engine.run(['cat-file', '-p', `${sha}:${path}`], { cwd: workdir });
+    if (r.code !== 0 || r.lines.some((l) => l.kind === 'err')) return null;
+    return r.lines.map((l) => l.text).join('\n') + '\n';
   }
 
   async rm(args, ctx) {

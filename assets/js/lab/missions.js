@@ -173,6 +173,55 @@ export const MISSIONS = [
     ],
   },
   {
+    id: 'checkout',
+    title: 'checkout으로 오가기',
+    summary: 'checkout 하나로 브랜치 이동, 새 브랜치 만들기, 과거 커밋 구경, 파일 되살리기를 모두 해 봅니다. (요즘은 switch/restore로 나눠 쓰지만 checkout도 꼭 읽을 줄 알아야 해요)',
+    concepts: ['checkout', 'checkout -b', 'detached HEAD', 'checkout --'],
+    requires: 'first-commit',
+    steps: [
+      {
+        text: '연습용 커밋을 하나 더 쌓아 둡니다. (과거로 가 볼 커밋이 필요해요)',
+        cmds: ['cd ~/my-project', 'echo "- checkout 연습" >> README.md', 'git commit -am "checkout 연습 준비"'],
+        check: (s) => inProject(s) && commitCount(s) >= 2 && [...repo(s).commits.values()].some((c) => c.message.includes('checkout 연습')),
+      },
+      {
+        text: '<code>git branch 이름</code>은 브랜치를 <b>만들기만</b> 하고 이동하지 않아요. 프롬프트의 (main)이 그대로인지 보세요.',
+        cmds: ['git branch experiment', 'git branch'],
+        check: (s) => inProject(s) && !!repo(s).branches.experiment && repo(s).head.branch === 'main',
+      },
+      {
+        text: '<code>git checkout 브랜치</code>로 이동합니다. (= <code>git switch experiment</code>)',
+        cmds: ['git checkout experiment'],
+        check: (s) => inProject(s) && repo(s).head.branch === 'experiment' && s.ran('git', 'checkout', 'experiment'),
+      },
+      {
+        text: '<code>checkout -b</code>는 "만들고 바로 이동"을 한 번에 합니다. (= <code>git switch -c</code>)',
+        cmds: ['git checkout -b hotfix', 'git branch'],
+        check: (s) => inProject(s) && repo(s).head.branch === 'hotfix' && s.ran('git', 'checkout', '-b'),
+      },
+      {
+        text: '커밋 하나 전으로 <b>시간 여행</b>을 해 봅니다. <code>HEAD~1</code>은 "지금보다 한 커밋 전"이에요. 브랜치가 아닌 커밋에 서 있는 이 상태를 <b>detached HEAD</b>라고 불러요.',
+        cmds: ['git checkout main', 'git checkout HEAD~1', 'cat README.md', 'git status'],
+        check: (s) => inProject(s) && repo(s).head.detached,
+      },
+      {
+        text: '구경이 끝났으면 브랜치로 돌아옵니다. (detached 상태에서 만든 커밋은 브랜치가 없어 잃어버리기 쉬워요)',
+        cmds: ['git switch main', 'cat README.md'],
+        check: (s) => inProject(s) && !repo(s).head.detached && repo(s).head.branch === 'main',
+      },
+      {
+        text: '<code>git checkout -- 파일</code>은 수정한 파일을 마지막 커밋 상태로 되돌려요. (= <code>git restore 파일</code>)',
+        cmds: ['echo "망가뜨림" > README.md', 'git checkout -- README.md', 'cat README.md'],
+        check: (s) => inProject(s) && s.ran('git', 'checkout', '--') && !repo(s).status.unstaged.some((e) => e.path === 'README.md'),
+      },
+      {
+        text: '연습용 브랜치를 정리합니다.',
+        cmds: ['git branch -d experiment', 'git branch -d hotfix', 'git branch'],
+        check: (s) => inProject(s) && !repo(s).branches.experiment && !repo(s).branches.hotfix,
+      },
+    ],
+  },
+  {
     id: 'conflict',
     title: '충돌(Conflict) 해결',
     summary: '두 브랜치가 같은 줄을 다르게 고쳤을 때 Git은 사람에게 결정을 맡깁니다. 직접 해결해 봐요.',
@@ -221,6 +270,7 @@ export const MISSIONS = [
     summary: '내 컴퓨터의 기록을 GitHub에 올리고(push), 동료의 작업을 받아(pull) 합칩니다.',
     concepts: ['remote', 'push', 'fetch', 'pull', 'clone'],
     requires: 'first-commit',
+    extra: { label: '👥 동료가 push 하기', action: 'teammatePush' },
     steps: [
       {
         text: '이 실습에는 <b>가상 GitHub</b>에 빈 저장소 <code>https://github.com/student/my-project.git</code>가 미리 만들어져 있어요. 내 저장소로 이동하세요.',
@@ -265,10 +315,65 @@ export const MISSIONS = [
     ],
   },
   {
+    id: 'team',
+    title: 'clone으로 팀 프로젝트 참여',
+    summary: '이미 GitHub에 있는 팀 저장소를 clone 해서, 내 브랜치를 push 하고, 동료의 변경을 fetch·merge 하는 실제 협업 흐름을 연습합니다.',
+    concepts: ['clone', 'branch -a', 'push -u origin 브랜치', 'fetch', 'merge origin/main'],
+    setup: { label: '팀 저장소 준비하기', action: 'prepareTeamRepo' },
+    extra: { label: '👥 동료가 main에 push', action: 'teamMainPush' },
+    steps: [
+      {
+        text: '위의 <b>"팀 저장소 준비하기"</b>를 누른 뒤, 팀 저장소를 <b>clone</b> 합니다. 원격의 모든 기록과 브랜치 정보가 통째로 복사돼요.',
+        cmds: ['cd ~', 'git clone https://github.com/team/web-app.git', 'cd web-app', 'git log --oneline'],
+        check: (s) => inProject(s, 'web-app') && commitCount(s) >= 2,
+      },
+      {
+        text: 'clone 하면 <b>origin</b>이 자동으로 연결되고, 원격 브랜치는 <code>origin/main</code>처럼 보여요.',
+        cmds: ['git remote -v', 'git branch -a'],
+        check: (s) => inProject(s, 'web-app') && s.ran('git', 'branch', '-a'),
+      },
+      {
+        text: 'main에 바로 커밋하지 않고 <b>내 기능 브랜치</b>에서 작업합니다.',
+        cmds: ['git switch -c feature/about', 'echo "회사 소개 페이지" > about.html', 'git add about.html', 'git commit -m "소개 페이지 추가"'],
+        check: (s) => inProject(s, 'web-app') && repo(s).head.branch === 'feature/about' && repo(s).branches['feature/about'] !== repo(s).branches.main,
+      },
+      {
+        text: '내 브랜치를 GitHub에 올립니다. <code>-u</code>는 "앞으로 이 브랜치는 origin의 같은 브랜치와 짝"이라는 뜻이에요. (실무에서는 이 다음에 PR을 만들어요)',
+        cmds: ['git push -u origin feature/about', 'git branch -a'],
+        check: (s) => inProject(s, 'web-app') && !!ghRepo(s, 'web-app')?.branches['feature/about'] && ghRepo(s, 'web-app').branches['feature/about'] === repo(s).branches['feature/about'],
+      },
+      {
+        text: '그 사이 동료가 main에 새 커밋을 올렸다고 해 봅시다. 위의 <b>"동료가 main에 push"</b> 버튼을 누르세요.',
+        cmds: [],
+        check: (s) => !!s.flags.teamMainPushed,
+      },
+      {
+        text: '<code>git fetch</code>는 원격 소식만 받아 <code>origin/main</code>을 갱신해요. 내 파일과 브랜치는 그대로! 시각화에서 갈라진 기록을 확인하세요.',
+        cmds: ['git fetch', 'git log --oneline --all'],
+        check: (s) => inProject(s, 'web-app') && !!s.flags.teamMainPushed && repo(s).remoteBranches['origin/main'] === ghRepo(s, 'web-app')?.branches.main,
+      },
+      {
+        text: '받아 온 <code>origin/main</code>을 내 브랜치에 합쳐 최신 상태를 따라잡습니다. (<code>git pull origin main</code>과 같은 효과)',
+        cmds: ['git merge origin/main', 'ls'],
+        check: (s) => inProject(s, 'web-app') && repo(s).head.branch === 'feature/about' && isAncestor(repo(s).commits, ghRepo(s, 'web-app')?.branches.main, repo(s).branches['feature/about']),
+      },
+      {
+        text: '합친 결과를 다시 push 합니다. 이미 짝이 지어져 있어 <code>git push</code>만 쳐도 돼요.',
+        cmds: ['git push'],
+        check: (s) => inProject(s, 'web-app') && !!s.flags.teamMainPushed && ghRepo(s, 'web-app')?.branches['feature/about'] === repo(s).branches['feature/about'] && isAncestor(repo(s).commits, ghRepo(s, 'web-app')?.branches.main, repo(s).branches['feature/about']),
+      },
+      {
+        text: '리뷰가 끝나 PR이 승인됐다고 치고, main에 합쳐 올립니다. (GitHub의 "Merge" 버튼이 하는 일을 직접!)',
+        cmds: ['git switch main', 'git pull', 'git merge feature/about', 'git push'],
+        check: (s) => inProject(s, 'web-app') && !!ghRepo(s, 'web-app')?.branches.main && isAncestor(repo(s).commits, repo(s).branches['feature/about'] ?? ghRepo(s, 'web-app')?.branches['feature/about'], ghRepo(s, 'web-app').branches.main),
+      },
+    ],
+  },
+  {
     id: 'undo',
     title: '실수 되돌리기',
     summary: 'Git이 있으면 실수가 두렵지 않습니다. 파일 수정, 스테이징, 커밋을 각각 되돌려 봐요.',
-    concepts: ['restore', 'restore --staged', 'reset'],
+    concepts: ['restore', 'restore --staged', 'revert'],
     requires: 'first-commit',
     steps: [
       {
@@ -297,9 +402,53 @@ export const MISSIONS = [
         check: (s) => inProject(s) && [...(repo(s).commits.values())].some((c) => c.message.includes('실수')),
       },
       {
-        text: '<code>reset --hard</code>로 직전 커밋을 없던 일로 합니다. ⚠️ 이미 push한 커밋에는 쓰지 마세요(동료 기록과 어긋나요).',
-        cmds: ['git reset --hard HEAD~1', 'git log --oneline'],
-        check: (s) => inProject(s) && s.ran('git', 'reset') && !(headCommit(s)?.message ?? '').includes('실수'),
+        text: '<code>git revert</code>는 그 커밋을 <b>거꾸로 적용한 새 커밋</b>을 만듭니다. 기록을 지우지 않으니 이미 push 한 커밋도 안전하게 되돌릴 수 있어요.',
+        cmds: ['git revert HEAD', 'git log --oneline', 'ls'],
+        check: (s) => inProject(s) && s.ran('git', 'revert') && (headCommit(s)?.message ?? '').startsWith('Revert') && !repo(s).files.includes('temp.txt'),
+      },
+    ],
+  },
+  {
+    id: 'reset',
+    title: 'reset 세 가지 모드',
+    summary: 'reset은 브랜치를 과거 커밋으로 되감습니다. --soft / --mixed / --hard는 "되감은 뒤 변경 내용을 어디에 남기느냐"만 달라요.',
+    concepts: ['reset --soft', 'reset --mixed', 'reset --hard', 'HEAD~N'],
+    requires: 'first-commit',
+    steps: [
+      {
+        text: '연습용 커밋 3개를 쌓습니다. (명령 칩을 차례로 실행하세요)',
+        cmds: [
+          'cd ~/my-project',
+          'echo "1" > reset.txt && git add reset.txt && git commit -m "리셋 연습 1"',
+          'echo "2" >> reset.txt && git commit -am "리셋 연습 2"',
+          'echo "3" >> reset.txt && git commit -am "리셋 연습 3"',
+        ],
+        check: (s) => inProject(s) && (headCommit(s)?.message ?? '').includes('리셋 연습 3'),
+      },
+      {
+        text: '<b>--soft</b>: 커밋만 취소하고 변경은 <span class="c-stage">스테이징</span>에 남겨요. "커밋 메시지를 고치고 싶을 때" 써요.',
+        cmds: ['git reset --soft HEAD~1', 'git status', 'git log --oneline -n 3'],
+        check: (s) => inProject(s) && s.ran('git', 'reset', '--soft') && (headCommit(s)?.message ?? '').includes('리셋 연습 2') && repo(s).status.staged.some((e) => e.path === 'reset.txt'),
+      },
+      {
+        text: '스테이징에 남은 변경으로 바로 다시 커밋합니다.',
+        cmds: ['git commit -m "리셋 연습 3 (메시지 수정)"'],
+        check: (s) => inProject(s) && (headCommit(s)?.message ?? '').includes('메시지 수정'),
+      },
+      {
+        text: '<b>--mixed</b>(기본값): 커밋과 스테이징을 취소하고 변경은 <span class="c-work">작업 디렉터리</span>에만 남겨요. "커밋을 다시 나눠 담고 싶을 때" 써요.',
+        cmds: ['git reset HEAD~1', 'git status'],
+        check: (s) => inProject(s) && (headCommit(s)?.message ?? '').includes('리셋 연습 2') && repo(s).status.unstaged.some((e) => e.path === 'reset.txt') && !repo(s).status.staged.some((e) => e.path === 'reset.txt'),
+      },
+      {
+        text: '<b>--hard</b>: 커밋·스테이징·작업 파일까지 <b>모두</b> 과거로 되돌려요. 남아 있던 변경도 사라집니다 ⚠️',
+        cmds: ['git reset --hard HEAD~1', 'git status', 'cat reset.txt'],
+        check: (s) => inProject(s) && s.ran('git', 'reset', '--hard') && (headCommit(s)?.message ?? '').includes('리셋 연습 1') && !repo(s).status.unstaged.length && !repo(s).status.staged.length,
+      },
+      {
+        text: '정리: reset은 <b>내 컴퓨터에만 있는 커밋</b>에 씁니다. 이미 push 한 커밋을 reset 하면 동료의 기록과 어긋나요 → 그때는 <code>git revert</code>!',
+        cmds: ['git log --oneline -n 3'],
+        check: (s) => inProject(s) && s.ran('git', 'log'),
       },
     ],
   },

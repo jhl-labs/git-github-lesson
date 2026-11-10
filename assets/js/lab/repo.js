@@ -32,7 +32,8 @@ export function parsePorcelain(lines) {
       if (!result.conflicts.includes(conflict[1])) result.conflicts.push(conflict[1]);
       continue;
     }
-    if (line.length < 4) continue;
+    // lg2가 덧붙이는 추적 브랜치 안내(# Your branch is ahead by …)는 파일 항목이 아니다
+    if (line.length < 4 || line.startsWith('#')) continue;
     const x = line[0];
     const y = line[1];
     let path = line.slice(3);

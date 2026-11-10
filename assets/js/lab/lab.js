@@ -10,6 +10,17 @@ import { TerminalView } from './terminal.js';
 import { renderVisualizer } from './visualizer.js';
 
 const PROGRESS_KEY = 'lab.missionsDone';
+const TIPS_KEY = 'lab.tipsCollapsed';
+const MIN_LAB_HEIGHT = 540;
+const WIDE_LAYOUT = '(min-width: 1201px)';
+
+/** 오른쪽 팁 패널의 명령 빠른 참조 (칩을 누르면 입력창에 채워진다) */
+const QUICK_REFERENCE = [
+  ['기록', ['git status', 'git add .', 'git commit -m "메시지"', 'git log --oneline --all', 'git diff']],
+  ['브랜치', ['git branch', 'git switch -c 이름', 'git checkout 이름', 'git merge 이름', 'git branch -d 이름']],
+  ['원격', ['git clone 주소', 'git remote -v', 'git push', 'git fetch', 'git pull']],
+  ['되돌리기', ['git restore 파일', 'git reset --soft HEAD~1', 'git reset --hard HEAD~1', 'git revert HEAD']],
+];
 const sessionState = { activeMission: null, stepsDone: {}, missionSince: {}, transcript: [] };
 
 export async function mountGitLab(container) {
@@ -55,6 +66,7 @@ class GitLabView {
     this.missionPanel = el('aside', { class: 'lab-missions', 'aria-label': '미션' });
     const termBox = el('div', { class: 'terminal' });
     this.vizBox = el('div', { class: 'lab-viz', 'aria-label': '저장소 시각화' });
+    const side = el('div', { class: 'lab-side' }, this.vizBox, this.#buildTips());
     const toolbar = el(
       'div',
       { class: 'lab-toolbar' },
@@ -64,7 +76,7 @@ class GitLabView {
       el('button', { type: 'button', class: 'btn btn-ghost btn-sm', onclick: () => confirm('실습 환경을 처음 상태로 초기화할까요? (모든 파일과 커밋이 사라집니다)') && location.reload() }, '초기화'),
     );
     this.container.replaceChildren(
-      el('div', { class: 'lab-grid' }, this.missionPanel, el('div', { class: 'lab-term' }, toolbar, termBox), this.vizBox),
+      el('div', { class: 'lab-grid' }, this.missionPanel, el('div', { class: 'lab-term' }, toolbar, termBox), side),
       this.#buildEditor(),
     );
     this.terminal = new TerminalView(termBox, {
@@ -80,10 +92,69 @@ class GitLabView {
       complete: (partial) => this.#completePath(partial),
     });
     this.session.shell.onEdit = (abs) => this.#openEditor(abs);
+    this.#fitToViewport();
     this.session.shell.onClear = () => {
       this.terminal.clear();
       sessionState.transcript = [];
     };
+  }
+
+  /** 넓은 화면에서 실습실이 화면 아래 끝까지 딱 맞도록 남은 높이를 계산한다(페이지 스크롤 없이 한 화면). */
+  #fitToViewport() {
+    const wide = matchMedia(WIDE_LAYOUT);
+    const fit = () => {
+      if (!this.container.isConnected) {
+        removeEventListener('resize', fit);
+        return;
+      }
+      if (!wide.matches) {
+        this.container.style.removeProperty('--lab-h');
+        return;
+      }
+      const top = this.container.getBoundingClientRect().top + scrollY;
+      this.container.style.setProperty('--lab-h', `${Math.max(MIN_LAB_HEIGHT, innerHeight - top - 16)}px`);
+    };
+    addEventListener('resize', fit);
+    requestAnimationFrame(fit);
+    document.fonts?.ready.then(fit);
+  }
+
+  #buildTips() {
+    const collapsed = store.get(TIPS_KEY, false);
+    const chip = (cmd) => el('button', { type: 'button', class: 'tip-chip', title: `${cmd} — 클릭하면 입력창에 채워져요`, onclick: () => this.terminal.insert(cmd) }, cmd.replace(/^git /, ''));
+    const body = el(
+      'div',
+      { class: 'lab-tips-body' },
+      el(
+        'dl',
+        { class: 'tip-ref' },
+        QUICK_REFERENCE.map(([group, cmds]) => el('div', {}, el('dt', {}, group), el('dd', {}, cmds.map(chip)))),
+      ),
+      el(
+        'p',
+        { class: 'tip-keys' },
+        el('kbd', {}, '↑↓'), ' 이전 명령 · ', el('kbd', {}, 'Tab'), ' 자동완성 · ',
+        el('code', {}, 'edit 파일'), ' 편집기 · ', el('code', {}, 'echo "글" > 파일'), ' 덮어쓰기 · ', el('code', {}, '>>'), ' 끝에 추가 · ',
+        el('code', {}, 'ls'), ' ', el('code', {}, 'cd'), ' ', el('code', {}, 'cat'), ' ', el('code', {}, 'clear'), ' ', el('code', {}, 'help'),
+      ),
+      el(
+        'details',
+        { class: 'tip-more' },
+        el('summary', {}, '이 실습실은 어떻게 동작하나요? · 실제 Git과 다른 점'),
+        el('p', { html: 'C로 만든 Git 라이브러리 <b>libgit2</b>를 WebAssembly로 컴파일한 <a href="https://github.com/petersalomonsen/wasm-git" target="_blank" rel="noopener">wasm-git</a>이 브라우저 메모리 안에서 진짜 커밋 객체를 만듭니다. "가상 GitHub"도 메모리 속 bare 저장소예요. 일부 명령(branch·switch·restore·pull·revert 등)은 실제 git과 같은 결과가 나오도록 실습실이 보완합니다.' }),
+        el('p', { html: '편집기(vim)가 없어 커밋 메시지는 <code>-m "메시지"</code>로 적어요. <code>rebase</code>·<code>stash</code>·<code>--amend</code>는 지원하지 않고, 새로고침하면 실습 내용이 사라집니다.' }),
+      ),
+    );
+    const box = el('section', { class: `lab-tips${collapsed ? ' is-collapsed' : ''}`, 'aria-label': '실습 팁' });
+    const toggle = el('button', { type: 'button', class: 'lab-tips-toggle', 'aria-expanded': String(!collapsed) }, collapsed ? '펼치기' : '접기');
+    toggle.addEventListener('click', () => {
+      const next = !box.classList.toggle('is-collapsed') ? false : true;
+      store.set(TIPS_KEY, next);
+      toggle.textContent = next ? '펼치기' : '접기';
+      toggle.setAttribute('aria-expanded', String(!next));
+    });
+    box.append(el('header', { class: 'lab-tips-head' }, el('strong', {}, '💡 팁 · 명령 빠른 참조'), toggle), body);
+    return box;
   }
 
   #remember(input, lines) {
@@ -245,7 +316,7 @@ class GitLabView {
     const firstOpen = nextIndex === -1 ? (count === active.steps.length ? -1 : count) : nextIndex;
     const actions = [];
     if (active.setup) actions.push(el('button', { type: 'button', class: 'btn btn-primary btn-sm', onclick: () => this.#runAction(active.setup.action) }, '⚙️ ', active.setup.label));
-    if (active.id === 'remote') actions.push(el('button', { type: 'button', class: 'btn btn-accent btn-sm', onclick: () => this.#runAction('teammatePush') }, '👥 동료가 push 하기'));
+    if (active.extra) actions.push(el('button', { type: 'button', class: 'btn btn-accent btn-sm', onclick: () => this.#runAction(active.extra.action) }, active.extra.label));
     if (active.requires && !finished.has(active.requires) && !(sessionState.stepsDone[active.requires] ?? []).length) {
       actions.push(el('p', { class: 'mission-warn' }, `이 미션은 "${MISSIONS.find((m) => m.id === active.requires).title}" 미션의 저장소(~/my-project)를 이어서 사용해요.`));
     }
