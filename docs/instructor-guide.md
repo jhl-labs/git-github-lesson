@@ -3,6 +3,7 @@
 ## 사전 점검 (수업 전날)
 
 - [ ] 사이트 배포 주소 접속, Git 실습실 미션 1~9를 한 번씩 끝까지 진행
+- [ ] PART 2 리허설 저장소 참고: `jhl-labs/git-github-practice` (Step 1~6을 실제로 실행한 결과물·Actions 실행 기록·PR 리뷰 예시). 조직 저장소로 수업한다면 비공개 멤버도 gate job 덕분에 통과하는지 확인
 - [ ] `templates/excel-dashboard/`를 새 공개 저장소에 복사해 Step 5까지 실제 실행 (GitHub-hosted Windows 이미지 변화 확인)
   - `scripts/` 테스트: `pip install openpyxl pytest && python -m pytest -q templates/excel-dashboard/tests`
 - [ ] Claude Code 로그인 방식(구독/API 키) 안내 준비, 사내 프록시 환경이면 npm 설치 확인

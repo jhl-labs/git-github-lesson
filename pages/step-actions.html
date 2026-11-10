@@ -84,9 +84,21 @@ jobs:
 
   <h3>권한: 누가 이 자동화를 깨울 수 있나?</h3>
   <p>
-    공개 저장소의 이슈는 <b>GitHub 계정만 있으면 누구나</b> 열 수 있어요. 이벤트에는 작성자와 저장소의 관계가 <code>author_association</code>으로 들어 있습니다.
-    <code>OWNER</code>(소유자), <code>MEMBER</code>(조직 멤버), <code>COLLABORATOR</code>(초대된 협업자)만 허용하고, <code>CONTRIBUTOR</code>·<code>NONE</code> 등 나머지는 건너뛰게 하는 것이 이번 워크플로우의 문지기예요.
+    공개 저장소의 이슈는 <b>GitHub 계정만 있으면 누구나</b> 열 수 있어요. 그래서 이 워크플로우는 맨 앞에 작은 Linux <b>gate job</b>(문지기)을 두고,
+    GitHub API(<code>repos/{저장소}/collaborators/{작성자}/permission</code>)로 <b>작성자의 실제 저장소 권한</b>을 확인해 <code>write</code> 이상일 때만 Windows 변환 job을 실행합니다.
+    권한 없는 이슈에 비싼 Windows 서버를 띄우지 않는 효과도 있어요.
     참고로 GITHUB_TOKEN으로 만든 push·이슈 같은 이벤트는 (무한 반복을 막기 위해) 새 워크플로우 실행을 만들지 않습니다.
+  </p>
+  <div class="callout callout-warn">
+    <span class="callout-title">왜 <code>author_association</code>만으로는 부족할까? (실제로 겪은 일)</span>
+    이벤트에는 작성자와 저장소의 관계가 <code>author_association</code>(<code>OWNER</code>·<code>MEMBER</code>·<code>COLLABORATOR</code>·<code>CONTRIBUTOR</code>·<code>NONE</code>…)으로 들어 있어 이것만 검사하는 예제가 많습니다.
+    그런데 <b>조직 저장소에서 멤버십을 비공개로 둔 사람</b>은 저장소 관리자여도 <code>MEMBER</code>가 아니라 <code>CONTRIBUTOR</code>로 표시돼, 이 과정의 리허설에서 워크플로우가 <b>skipped</b> 됐습니다.
+    개인 계정 저장소라면 본인은 항상 <code>OWNER</code>라 문제없지만, 조직에서 수업하거나 팀이 함께 쓸 땐 <b>권한 API로 확인</b>하는 쪽이 확실해요.
+  </div>
+  <h3>Windows runner의 함정: 한글 출력 인코딩</h3>
+  <p>
+    Windows runner에서 파이썬의 기본 콘솔 인코딩은 <code>cp1252</code>라, 스크립트가 한글이나 이모지(✅)를 <code>print</code>하는 순간 <code>UnicodeEncodeError</code>로 실패합니다.
+    내 PC(Linux·macOS)에선 멀쩡하던 스크립트가 runner에서만 깨지는 대표적인 예예요. job에 <code>env: PYTHONUTF8: "1"</code>을 주면 파이썬이 UTF-8 모드로 동작해 해결됩니다.
   </p>
 
   <h3>꼭 알아야 할 보안 두 가지</h3>
@@ -140,8 +152,11 @@ jobs:
 
 ## 4. 워크플로우: .github/workflows/excel-to-dashboard.yml
 - on: issues opened
-- 조건: 제목이 [EXCEL] 로 시작 AND 작성자 author_association 이 OWNER, MEMBER, COLLABORATOR 중 하나
-- runs-on: windows-latest, timeout 20분, concurrency 그룹으로 동시 실행 방지
+- gate job (ubuntu-latest): 제목이 [EXCEL] 로 시작할 때만 실행. gh api 로 이슈 작성자의 저장소 권한
+  (repos/{repo}/collaborators/{작성자}/permission)을 확인해 admin/maintain/write 면 allowed=true 출력
+  (author_association 은 비공개 조직 멤버가 CONTRIBUTOR 로 와서 쓰지 않는다)
+- convert job: needs: gate, allowed 가 true 일 때만. runs-on: windows-latest, timeout 20분,
+  env PYTHONUTF8: "1" (Windows 콘솔 cp1252 에서 한글 print 오류 방지), concurrency 그룹으로 동시 실행 방지
 - permissions: contents write, issues write 만
 - 단계: checkout → setup-python 3.12(pip 캐시) → 의존성 설치 → 첨부 다운로드 → 변환(--engine auto) → publish_docs.sh(bash) → 이슈에 Pages 주소와 실행 로그 링크를 댓글로 달고 이슈 닫기
 - 실패하면 이슈에 실패 댓글
@@ -173,7 +188,7 @@ git switch main && git merge feature/actions && git push</pre>
 </div>
 
 <div class="quiz" data-answer="c">
-  <p class="quiz-q">이 워크플로우에 <code>author_association</code> 조건이 없다면 어떤 일이 생길 수 있을까요?</p>
+  <p class="quiz-q">이 워크플로우에 작성자 권한을 확인하는 gate job이 없다면 어떤 일이 생길 수 있을까요?</p>
   <div class="quiz-options">
     <button type="button" data-opt="a">아무 일도 없다. 이슈는 저장소 주인만 쓸 수 있다</button>
     <button type="button" data-opt="b">워크플로우가 실행되지 않는다</button>
@@ -210,7 +225,8 @@ git switch main && git merge feature/actions && git push</pre>
     <div><dt>Event → Job → Step</dt><dd>이슈가 열리는 이벤트가 워크플로우를 깨우고, <code>convert</code> job이 runner 한 대에서 step을 순서대로 실행합니다.</dd></div>
     <div><dt>runner는 일회용 VM</dt><dd>빈 컴퓨터로 시작해서 <code>actions/checkout</code>이 먼저 필요하고, 끝나면 사라지니 결과는 <code>docs</code> 브랜치 커밋으로 남겨요.</dd></div>
     <div><dt>최소 권한</dt><dd><code>permissions:</code>에 push용 <code>contents: write</code>, 댓글용 <code>issues: write</code>만 줬어요.</dd></div>
-    <div><dt>문지기 조건</dt><dd>제목이 <code>[EXCEL]</code>로 시작하고 작성자가 OWNER·MEMBER·COLLABORATOR일 때만 실행. 공개 저장소의 아무나 데이터를 못 바꾸게 해요.</dd></div>
+    <div><dt>문지기 gate job</dt><dd>제목이 <code>[EXCEL]</code>로 시작하고, 권한 API로 확인한 작성자 권한이 write 이상일 때만 변환. 공개 저장소의 아무나 데이터를 못 바꾸게 해요.</dd></div>
+    <div><dt>PYTHONUTF8</dt><dd>Windows runner의 콘솔 인코딩(cp1252) 때문에 한글 출력이 깨지지 않도록 convert job에 <code>PYTHONUTF8: "1"</code>을 줬어요.</dd></div>
     <div><dt>스크립트 인젝션 방지</dt><dd>이슈 제목·본문은 <code>run:</code>에 직접 쓰지 않고 <code>env:</code>로 넘겨 "값"으로만 다룹니다.</dd></div>
   </dl>
   <h3>🔍 확인하고 넘어가기</h3>
@@ -219,7 +235,7 @@ git switch main && git merge feature/actions && git push</pre>
     <li>저장소 Labels에 <code>excel-upload</code>가 있다</li>
     <li>워크플로우 파일에서 <code>on</code>·<code>if</code>·<code>runs-on</code>·<code>permissions</code>가 각각 무슨 뜻인지 짚어 봤다</li>
     <li>이슈 제목을 <code>run:</code>에 직접 넣으면 왜 위험한지 설명할 수 있다</li>
-    <li><code>author_association</code> 조건이 없으면 어떤 일이 생기는지 말할 수 있다</li>
+    <li>gate job이 없으면 어떤 일이 생기는지, 왜 <code>author_association</code>보다 권한 API가 확실한지 말할 수 있다</li>
   </ul>
   <div class="wrapup-next"><b>➡️ 다음 Step</b> — <a href="#/step-pages">Step 4</a>에서는 <code>docs</code> 브랜치의 <code>data.json</code>을 보여줄 대시보드와 비밀번호 화면을 만들고, GitHub Pages로 배포합니다. 오늘 만든 <code>publish_docs.sh</code>가 대시보드 파일을 <code>docs</code>에 올리는 데 다시 쓰이고, <code>excel-to-dashboard.yml</code> 끝에는 Pages 배포 job이 추가돼요.</div>
 </section>

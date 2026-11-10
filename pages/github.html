@@ -139,7 +139,7 @@ cd excel-dashboard</pre>
 - 사용자가 GitHub 이슈에 엑셀(.xlsx) 파일을 첨부해 등록하면
 - GitHub Actions의 windows-latest runner에서 xlwings로 엑셀을 읽어 JSON으로 변환하고
 - 결과를 docs 브랜치의 data/data.json 으로 커밋한다
-- GitHub Pages는 docs 브랜치를 서빙하며, 비밀번호를 입력해야 대시보드(KPI, 차트, 표)를 볼 수 있다
+- 같은 실행의 배포 job이 docs 브랜치 내용을 GitHub Pages에 배포하며(Pages Source: GitHub Actions), 비밀번호를 입력해야 대시보드(KPI, 차트, 표)를 볼 수 있다
 
 ## 폴더 구조
 - scripts/  : 파이썬 스크립트 (변환기, 첨부파일 다운로드, docs 브랜치 배포 스크립트)

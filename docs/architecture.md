@@ -48,7 +48,7 @@ lg2는 libgit2 예제 CLI라 다음이 없거나 출력이 다르다. 실제 git
 ## ADR-6. 실습 프로젝트 설계
 
 - **xlwings + windows-latest**: 요구사항(Excel 앱 기반 읽기, OS 선택 경험)을 따른다. GitHub-hosted Windows 이미지에 Excel이 없을 수 있으므로 `--engine auto`로 openpyxl 대체 + `::warning::`으로 사실을 드러낸다. 이 한계를 마지막 장의 교육 소재로 사용한다.
-- **보안 기본값**: 이슈 본문/제목은 `env`로만 전달(스크립트 인젝션 방지), `author_association` 필터, 최소 `permissions`, 첨부 다운로드 도메인 허용 목록·크기 제한, 대시보드 출력은 `textContent`.
+- **보안 기본값**: 이슈 본문/제목은 `env`로만 전달(스크립트 인젝션 방지), 작성자 권한 gate job(ADR-11), 최소 `permissions`, 첨부 다운로드 도메인 허용 목록·크기 제한, 대시보드 출력은 `textContent`.
 - **로그인 흉내**: SHA-256 해시 비교 + `sessionStorage`. 의도적으로 약한 구조이며, "한계" 장의 위젯으로 우회·역산을 직접 시연한다.
 - **docs 브랜치 + Actions 배포**: `git worktree`로 main 작업 폴더를 건드리지 않고 orphan `docs` 브랜치에 커밋한다. 화면만 바뀔 때는 Linux runner(`deploy-dashboard.yml`)가 데이터는 유지한 채 반영한다.
   - **수정(ADR-10)**: 처음에는 Pages Source를 "Deploy from a branch(docs)"로 두었으나, GitHub 공식 문서상 *GITHUB_TOKEN으로 push한 커밋은 Pages 빌드를 트리거하지 않는다*. 봇의 데이터 커밋이 사이트에 반영되지 않는 결함이었다. Source를 **GitHub Actions**로 바꾸고, 재사용 워크플로우 `pages-deploy.yml`(docs 체크아웃 → upload-pages-artifact → deploy-pages, ubuntu)을 `excel-to-dashboard.yml`·`deploy-dashboard.yml`의 마지막 `deploy` job에서 호출한다. docs 브랜치는 배포 결과물·데이터 이력 보관소로 유지한다. PAT를 쓰는 대안은 비밀 관리 부담 때문에 택하지 않았다.
@@ -83,3 +83,13 @@ lg2는 libgit2 예제 CLI라 다음이 없거나 출력이 다르다. 실제 git
 - **`checkout <리비전>`**: 브랜치도 파일도 아니면 `rev-parse`로 해석해 `HEAD~2`, 태그, 해시 모두 detached HEAD로 이동한다.
 - **porcelain 파서 버그 수정**: 추적 브랜치가 뒤처지면 lg2가 `# Your branch is ahead by …` 줄을 출력하는데, 이를 스테이징 항목으로 오인해 merge/pull이 "로컬 변경 있음"으로 막혔다. `#`로 시작하는 줄은 무시한다.
 - **한 화면 작업대(1201px 이상)**: 미션 | 터미널 | (시각화 + 팁) 3열. 높이는 `lab.js`가 `innerHeight - 실습실 시작 위치`로 계산해 `--lab-h`에 넣는다(제목 높이가 바뀌어도 정확). 실습실 페이지는 제목·소개를 압축한다. 팁(명령 빠른 참조 칩 · 단축키 · 동작 원리)은 페이지 하단 표에서 오른쪽 칸 아래로 옮기고 접을 수 있게 했다(접힘 상태는 localStorage). 1201~1500px은 칸을 좁히고 팁 높이를 제한한다. 1200px 이하는 기존 세로 배치.
+
+## ADR-11. 실제 GitHub 리허설 결과 반영 (2026-11-10)
+
+`jhl-labs/git-github-practice`(Public)에서 PART 2를 Step 1~6 순서대로 실제 실행했다. 이슈 첨부는 웹 UI로만 올릴 수 있어(API 미지원) 본문에 공개 샘플 파일의 `raw.githubusercontent.com` 링크를 넣어 같은 경로를 시험했다.
+
+- **결과**: Pages Source=GitHub Actions + `pages-deploy.yml` 구조로 `publish → deploy`, `gate → convert(Windows) → deploy`, PR 병합 후 재배포까지 모두 성공. 실측 소요: gate 3초, Windows 변환 약 40초, Pages 배포 약 15초. GitHub-hosted Windows에는 Excel이 없어 xlwings는 `Invalid class string`으로 실패하고 openpyxl 대체가 동작했다.
+- **결함 1 — `author_association` 필터**: 조직 멤버십이 비공개인 사용자는 이벤트에서 `MEMBER`가 아니라 `CONTRIBUTOR`로 표시되어 관리자인데도 job이 skipped 됐다. → 작은 Linux `gate` job이 `gh api repos/{repo}/collaborators/{author}/permission`으로 실제 권한(admin/maintain/write)을 확인하고, convert는 `needs: gate` + `allowed == 'true'`일 때만 실행하도록 바꿨다. 권한 없는 이슈에 Windows VM을 띄우지 않는 비용 이점도 있다.
+- **결함 2 — Windows 콘솔 인코딩**: runner의 파이썬 기본 출력 인코딩이 cp1252라 한글·이모지 `print`에서 `UnicodeEncodeError`. → convert job에 `env: PYTHONUTF8: "1"`.
+- **관찰**: `setup-python`의 pip 캐시 저장이 "cache write denied: token has no writable scopes" 경고와 함께 건너뛰어졌다(이슈 이벤트 실행). 실행은 성공하며 의존성 설치가 매번 몇 초 더 걸릴 뿐이라 그대로 둔다.
+- **Step 6**: `claude -p` 리뷰(🔴 없음, 🟡 8건) 중 1~3·5번을 반영해 PR에 추가 커밋 → squash merge. `ai-review.yml`은 `ANTHROPIC_API_KEY` Secret이 없을 때 경고만 남기고 성공 종료하는 것을 확인했다(Secret은 등록하지 않음). 반영된 CSV 다운로드 기능은 정답 예시 `templates/excel-dashboard/dashboard/`에도 넣었다.

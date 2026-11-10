@@ -306,7 +306,7 @@ steps:
     <tr><td>상태 함수</td><td><code>success()</code>(기본), <code>failure()</code>, <code>cancelled()</code>, <code>always()</code></td></tr>
   </tbody>
 </table>
-<p>PART 2의 <code>contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)</code>은 "배열 리터럴을 만들고 포함 여부를 검사"하는 전형적인 패턴입니다.</p>
+<p>예를 들어 <code>contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)</code>은 "배열 리터럴을 만들고 포함 여부를 검사"하는 전형적인 패턴입니다.</p>
 
 <h3>파일 기반 명령: GITHUB_ENV · GITHUB_OUTPUT · GITHUB_STEP_SUMMARY</h3>
 <pre data-lang="bash"># 다음 step부터 쓸 환경 변수
@@ -591,7 +591,7 @@ updates:
   <li>서드파티 Action은 SHA 고정 + Dependabot, 허용 목록 정책</li>
   <li><code>actions/checkout</code>에 <code>persist-credentials: false</code> (이후 step이 git push할 필요가 없다면)</li>
   <li>장기 클라우드 키 대신 OIDC, 배포 secret은 environment에</li>
-  <li>공개 저장소에서 누가 워크플로우를 깨울 수 있는지(<code>author_association</code>, fork PR 승인 설정) 확인</li>
+  <li>공개 저장소에서 누가 워크플로우를 깨울 수 있는지 확인 — <code>author_association</code>은 비공개 조직 멤버가 <code>CONTRIBUTOR</code>로 표시되므로, 확실히 하려면 권한 API(<code>collaborators/{user}/permission</code>)로 검사(PART 2의 gate job). fork PR 승인 설정도 점검</li>
   <li><code>CODEOWNERS</code>로 <code>.github/workflows/</code> 변경에 리뷰 필수</li>
   <li>정적 분석 도구(<code>zizmor</code>, <code>actionlint</code>)와 CodeQL의 Actions 분석으로 워크플로우 점검</li>
 </ul>

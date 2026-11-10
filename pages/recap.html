@@ -9,7 +9,7 @@
 <ol class="steps">
   <li><strong>이슈 등록</strong> 이슈 폼에 엑셀을 끌어다 놓자 GitHub이 파일을 보관하고, 본문에 <code>user-attachments</code> 첨부 링크를 넣었어요.</li>
   <li><strong>이벤트 발생</strong> GitHub이 <code>issues: opened</code> 이벤트와 이슈 정보(JSON 페이로드)를 만들어, <code>on: issues</code>로 기다리던 워크플로우를 깨웠어요.</li>
-  <li><strong>조건 확인</strong> job의 <code>if:</code>가 제목의 <code>[EXCEL]</code>과 작성자의 <code>author_association</code>을 검사해 "실행해도 되는 요청"인지 걸렀어요.</li>
+  <li><strong>조건 확인</strong> 먼저 Linux gate job이 제목의 <code>[EXCEL]</code>과 (권한 API로) 작성자의 저장소 권한을 검사해 "실행해도 되는 요청"인지 걸렀어요.</li>
   <li><strong>실제 Windows 서버 준비</strong> GitHub이 클라우드에 이 job 전용 Windows Server VM을 새로 만들고, <code>actions/checkout</code>으로 저장소 코드를 내려받았어요.</li>
   <li><strong>엑셀 읽기</strong> 그 서버에서 파이썬이 첨부 파일을 내려받아 검사(도메인·크기·ZIP 서명)한 뒤, xlwings를 시도하고 Excel이 없어 openpyxl로 대체해 읽었어요.</li>
   <li><strong>JSON 생성</strong> 행·열·타입·합계를 담은 <code>build/data.json</code>을 만들었어요.</li>
