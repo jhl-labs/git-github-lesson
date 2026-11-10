@@ -98,6 +98,18 @@ _No response_</pre>
   <li><strong>Submit new issue</strong></li>
 </ol>
 
+<section class="gh-guide">
+  <h2>🧭 GitHub 화면 익히기: 이슈 화면 읽기</h2>
+  <ul>
+    <li><b>제목 아래 상태 배지</b> — 처음엔 초록색 <b>Open</b>. 봇이 처리를 마치면 보라색 <b>Closed</b>(completed)로 바뀌어요.</li>
+    <li><b>타임라인</b> — 본문 아래로 "라벨이 붙음", 봇(<code>github-actions</code>)의 댓글, "closed this as completed" 같은 사건이 시간순으로 쌓여요. 실패하면 실패 댓글과 실행 로그 링크가 남습니다.</li>
+    <li><b>오른쪽 사이드바</b> — Labels(<code>excel-upload</code>), Assignees, Development(연결된 PR·브랜치).</li>
+    <li><b>이슈 목록 검색</b> — 기본 필터는 <code>is:issue is:open</code>이라 닫힌 이슈는 안 보여요. <code>is:issue is:closed label:excel-upload</code>로 지난 업로드를 모아 볼 수 있어요.</li>
+    <li><b>알림</b> — 저장소 오른쪽 위 <b>Watch</b>로 알림 범위를 정하고, 내가 연 이슈에 댓글이 달리면 GitHub 알림(🔔)과 메일로 와요.</li>
+  </ul>
+  <p class="muted">⚠️ 파일 첨부(끌어다 놓기)는 <b>웹 화면에서만</b> 됩니다. <code>gh issue create</code>로는 파일을 첨부할 수 없어요.</p>
+</section>
+
 <h2>5-2. Actions 지켜보기</h2>
 <p><b>Actions</b> 탭으로 가면 노란 점(실행 중)이 돌고 있을 거예요. 클릭해서 각 단계의 로그를 펼쳐 보세요. 터미널에서도 볼 수 있습니다.</p>
 <pre data-lang="bash">gh run list --limit 5

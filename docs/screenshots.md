@@ -10,6 +10,8 @@
 | `claude-code-start.png` | Step 1 | 저장소 폴더에서 `claude` 실행 직후 화면 |
 | `github-first-push.png` | Step 1 | CLAUDE.md push 후 저장소 화면 |
 | `actions-run-detail.png` | Step 3 | Actions 실행 상세(Step별 로그 펼침) |
+| `github-settings-menu.png` | Step 1 | Settings 왼쪽 메뉴(General·Collaborators·Rules·Actions·Environments·Pages·Secrets) |
+| `actions-tab.png` | Step 3 | Actions 탭(워크플로우 목록·실행 기록·상태 아이콘) |
 | `actions-permissions.png` | Step 3 | Settings → Actions → General → Workflow permissions |
 | `dashboard-done.png` | Step 4 | 완성된 대시보드(KPI·차트·표) |
 | `pages-settings.png` | Step 4 | Settings → Pages에서 Source를 "GitHub Actions"로 선택 |
@@ -18,3 +20,4 @@
 | `actions-running.png` | Step 5 | Windows runner에서 실행 중인 워크플로우 |
 | `pr-opened.png` | Step 6 | 열린 PR(Conversation·Files changed 탭) |
 | `pr-ai-review-comment.png` | Step 6 | Actions가 남긴 AI 리뷰 댓글 |
+| `ruleset-main.png` | Step 6 | Settings → Rules → Rulesets의 main 보호 규칙 |

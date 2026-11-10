@@ -87,6 +87,36 @@
   </div>
 </section>
 
+<h2>🧭 GitHub 화면 익히기: Pull Request 화면</h2>
+<section class="gh-guide">
+  <p>브랜치를 push하면 저장소 첫 화면에 노란 <b>"Compare &amp; pull request"</b> 배너가 떠요. 웹에서 PR을 만들 때는 이 버튼을 누르거나, <b>Pull requests → New pull request</b>에서 <b>base</b>(합쳐질 곳, 보통 main) ← <b>compare</b>(내 브랜치)를 고릅니다.</p>
+  <div class="gh-tabs" aria-label="PR 화면 탭">
+    <span class="is-key">Conversation</span><span>Commits</span><span>Checks</span><span class="is-key">Files changed</span>
+  </div>
+  <table>
+    <thead><tr><th>부분</th><th>무엇을 보나</th></tr></thead>
+    <tbody>
+      <tr><td>제목 옆 상태</td><td>Open · Draft(작업 중, 병합 불가) · Merged · Closed. 그 아래 <code>main ← feature/csv-download</code>로 어디를 어디에 합치는지 표시</td></tr>
+      <tr><td><b>Conversation</b></td><td>PR 설명, 댓글, 리뷰 결과, 자동 검사(Actions) 결과, 맨 아래 <b>Merge 버튼</b></td></tr>
+      <tr><td>Commits · Checks</td><td>이 PR에 포함된 커밋들 / 실행된 워크플로우와 결과</td></tr>
+      <tr><td><b>Files changed</b></td><td>바뀐 줄(diff). 줄 번호 옆 <b>+</b>를 눌러 그 줄에 댓글을 달 수 있어요</td></tr>
+      <tr><td>오른쪽 사이드바</td><td>Reviewers(리뷰 요청할 사람), Assignees, Labels, Development(연결된 이슈 — 본문에 <code>Closes #번호</code>)</td></tr>
+    </tbody>
+  </table>
+  <h3>웹에서 리뷰하는 순서</h3>
+  <ol class="steps">
+    <li><strong>Files changed</strong> 탭에서 diff를 읽고, 의견이 있는 줄의 <b>+</b> → 댓글 작성 → <b>Start a review</b></li>
+    <li>다 봤으면 오른쪽 위 <b>Review changes</b>(또는 Finish your review) → <b>Comment</b>(의견만) / <b>Approve</b>(합쳐도 좋음) / <b>Request changes</b>(고쳐야 함) 중 선택해 제출</li>
+    <li>작성자가 같은 브랜치에 커밋을 push하면 PR에 자동으로 반영되고, 리뷰어가 다시 확인</li>
+    <li>Conversation 맨 아래 <b>Merge</b> 버튼 옆 ▾에서 방식(Create a merge commit / Squash and merge / Rebase and merge)을 골라 병합 → <b>Delete branch</b></li>
+  </ol>
+  <div class="callout">
+    <span class="callout-title">혼자 하는 실습이라면</span>
+    <b>내 PR은 내가 Approve할 수 없어요.</b> 혼자일 땐 Comment로 셀프 리뷰를 남기거나, 이 Step처럼 AI 리뷰를 "두 번째 눈"으로 씁니다. 팀이라면 동료를 Reviewers에 지정하세요.
+    허용할 병합 방식과 "병합 후 브랜치 자동 삭제"는 <b>Settings → General → Pull Requests</b>에서 정해요.
+  </div>
+</section>
+
 <h2>6-1. 기능 브랜치에서 작업하고 PR 열기</h2>
 <p>대시보드에 작은 기능을 추가해 봅시다.</p>
 <pre data-lang="bash">git switch main && git pull
@@ -196,6 +226,35 @@ gh pr merge --squash --delete-branch   # 지금 브랜치의 PR을, 여러 커�
 git switch main && git pull</pre>
 <p>main에 합쳐지면 <code>deploy-dashboard</code> 워크플로우가 실행되어 Pages에도 CSV 버튼이 생깁니다. <b>코드 리뷰 → 병합 → 자동 배포</b>, 실무 개발 흐름 한 바퀴를 완주했어요! 🎉</p>
 
+<h2>6-6. (권장) main 브랜치 보호 규칙 켜기</h2>
+<p>지금은 누구든 쓰기 권한만 있으면 <code>git push</code>로 main을 바로 바꿀 수 있어요. 실무에서는 <b>main은 PR로만 바뀌게</b> 막아 둡니다. GitHub에서는 이걸 <b>Ruleset</b>(브랜치 규칙)으로 설정해요. 무료 플랜에서는 Public 저장소에서 사용할 수 있습니다.</p>
+<ol class="steps">
+  <li><strong>Settings → Rules → Rulesets → New ruleset → New branch ruleset</strong></li>
+  <li><strong>이름·적용</strong> — Ruleset name: <code>main 보호</code>, Enforcement status: <b>Active</b>, Target branches: <b>Add target → Include default branch</b></li>
+  <li><strong>규칙 체크</strong>
+    <ul>
+      <li>✅ <b>Restrict deletions</b> — main 삭제 금지</li>
+      <li>✅ <b>Block force pushes</b> — 강제 push로 기록 덮어쓰기 금지</li>
+      <li>✅ <b>Require a pull request before merging</b> — PR을 거쳐야만 병합. Required approvals는 <b>혼자면 0</b>(내 PR을 내가 승인할 수 없어 1이면 영영 못 합쳐요), <b>팀이면 1 이상</b></li>
+      <li>(선택) <b>Require status checks to pass</b> — 지정한 Actions 검사(테스트 등)가 통과해야 병합</li>
+    </ul>
+  </li>
+  <li><strong>Create</strong>로 저장</li>
+  <li><strong>확인</strong> — main에서 직접 커밋을 push해 보면 거절돼요.
+    <pre data-lang="bash">git switch main
+git commit --allow-empty -m "보호 규칙 시험"
+git push   # remote: error: GH013: Repository rule violations found for refs/heads/main → 정상!
+git reset --hard origin/main   # 시험 커밋 되돌리기 (push 안 됐으니 reset으로 OK)</pre>
+  </li>
+</ol>
+<figure class="shot" data-src="assets/img/screens/ruleset-main.png">
+  <figcaption>Settings → Rules → Rulesets — main 보호 규칙</figcaption>
+</figure>
+<div class="callout callout-tip">
+  <span class="callout-title">봇의 push는 괜찮을까?</span>
+  이 규칙은 <code>main</code>에만 걸려요. 봇(GitHub Actions)은 <code>docs</code> 브랜치에만 push하므로 영향이 없습니다. 관리자만 규칙을 건너뛰게 하려면 <b>Bypass list</b>에 역할을 추가할 수 있지만, 연습 중에는 비워 두세요.
+</div>
+
 <section class="wrapup">
   <h2>🏁 마무리: 리뷰 → 병합 → 자동 배포, 한 바퀴 완주</h2>
   <p>
@@ -228,6 +287,8 @@ git switch main && git pull</pre>
   </dl>
   <h3>🔍 확인하고 넘어가기</h3>
   <ul class="checklist" data-checklist="wrapup-step-review">
+    <li>PR 화면의 Conversation·Files changed 탭에서 줄 단위 댓글과 Approve/Request changes를 남기는 법을 안다</li>
+    <li>(권장) main 브랜치 보호 규칙(Ruleset)을 켜고, main에 직접 push가 거절되는 것을 확인했다</li>
     <li>PR에 "🤖 AI 코드 리뷰" 댓글이 자동으로 달렸다</li>
     <li>PR이 merge되고 main에 squash 커밋이 1개 생겼다</li>
     <li>Pages 대시보드에서 CSV 다운로드 버튼이 동작하고, 엑셀로 열어도 한글이 깨지지 않는다</li>

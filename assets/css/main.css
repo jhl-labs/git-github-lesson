@@ -850,6 +850,52 @@ svg {
   font-size: 14.5px;
 }
 
+/* ── GitHub 화면 익히기 박스 ──────────────────────────
+   <section class="gh-guide"><h2>🧭 GitHub 화면 익히기: …</h2> … </section>
+   GitHub를 처음 쓰는 사람에게 그 Step에서 처음 만나는 화면·설정·개념을 안내한다. */
+.gh-guide {
+  margin: 8px 0 32px;
+  padding: 20px 24px 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line-strong);
+  border-top: 4px solid var(--ink);
+  background: var(--bg-elev);
+  box-shadow: var(--shadow);
+}
+.prose .gh-guide > h2 {
+  margin-top: 0;
+}
+.prose .gh-guide h3 {
+  margin-top: 20px;
+}
+.gh-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunk);
+  border: 1px solid var(--line);
+  font-size: 13.5px;
+}
+.gh-tabs span {
+  padding: 3px 10px;
+  border-radius: 99px;
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+  white-space: nowrap;
+}
+.gh-when td:last-child,
+.gh-when th:last-child {
+  white-space: nowrap;
+}
+.gh-tabs span.is-key {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+
 /* ── 개념 지도(명령 ↔ 개념 표) ─────────────────────── */
 .concept-map td:first-child {
   white-space: nowrap;

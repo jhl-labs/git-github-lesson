@@ -79,9 +79,6 @@
   <div class="card card-remote"><span class="card-icon">🌐</span><h3>Pages</h3><p>저장소 파일을 그대로 웹사이트로 공개.</p></div>
 </div>
 
-<figure class="shot" data-src="assets/img/screens/github-repo-tabs.png">
-  <figcaption>저장소 상단 탭 — Code · Issues · Pull requests · Actions · Settings(→ Pages)</figcaption>
-</figure>
 
 
 <h2>1-1. 저장소 만들기</h2>
@@ -113,7 +110,86 @@ cd excel-dashboard</pre>
   <code>git remote -v</code>를 쳐 보면 <code>origin</code>이 GitHub 주소로 이미 연결되어 있을 거예요.
 </div>
 
-<h2>1-2. Claude Code 시작하기</h2>
+<h2>1-2. GitHub 화면 익히기: 저장소 · 설정 · 권한</h2>
+<section class="gh-guide">
+  <p>방금 만든 저장소를 브라우저로 열어 보세요(<code>gh repo view --web</code>). 앞으로 모든 Step이 이 화면에서 일어나니, 어디에 무엇이 있는지 한 번 훑고 갑니다.</p>
+
+  <h3>저장소 화면의 탭</h3>
+  <div class="gh-tabs" aria-label="저장소 상단 탭">
+    <span class="is-key">&lt;&gt; Code</span><span class="is-key">Issues</span><span class="is-key">Pull requests</span><span class="is-key">Actions</span><span>Projects</span><span>Wiki</span><span>Security</span><span>Insights</span><span class="is-key">⚙ Settings</span>
+  </div>
+  <table>
+    <thead><tr><th>탭</th><th>무엇을 하는 곳</th><th>이 과정에서</th></tr></thead>
+    <tbody>
+      <tr><td><b>Code</b></td><td>파일·폴더, README, 브랜치, 커밋 기록</td><td>매 Step (push 결과 확인)</td></tr>
+      <tr><td><b>Issues</b></td><td>할 일·버그·요청을 글로 남기는 게시판. 번호(#1, #2…)가 붙고 열림/닫힘 상태가 있음</td><td>Step 3에서 템플릿 만들고 Step 5에서 엑셀 업로드 창구로 사용</td></tr>
+      <tr><td><b>Pull requests</b></td><td>"내 브랜치를 합쳐 주세요" 요청과 코드 리뷰</td><td>Step 6</td></tr>
+      <tr><td><b>Actions</b></td><td>워크플로우(자동화) 목록과 실행 기록·로그</td><td>Step 3~6</td></tr>
+      <tr><td><b>Settings</b></td><td>저장소 설정. <b>관리자(Admin, 일부 메뉴는 Maintain)</b>에게만 보임 — 내가 만든 저장소라면 보여요</td><td>아래 지도 참고</td></tr>
+      <tr><td>Projects · Wiki · Security · Insights</td><td>칸반 보드, 문서 위키, 보안 경고, 통계</td><td>(이번엔 쓰지 않음 · <a href="#/expert-github">GitHub 깊이 알기</a>)</td></tr>
+    </tbody>
+  </table>
+  <figure class="shot" data-src="assets/img/screens/github-repo-tabs.png">
+    <figcaption>저장소 첫 화면 — 상단 탭, 브랜치 선택, 초록색 Code 버튼, README</figcaption>
+  </figure>
+
+  <h3>Code 탭에서 읽어야 할 것</h3>
+  <ul>
+    <li><b>브랜치 드롭다운</b>(<code>main</code> ▾) — 다른 브랜치의 파일을 볼 때. Step 4 이후엔 <code>docs</code> 브랜치도 여기서 볼 수 있어요.</li>
+    <li><b>🕒 커밋 수</b> 링크 — 커밋 기록(<code>git log</code>의 웹 버전). 커밋을 누르면 바뀐 줄(diff)이 보입니다.</li>
+    <li><b>초록색 Code 버튼</b> — clone 주소(HTTPS/SSH), ZIP 다운로드.</li>
+    <li><b>README.md</b> — 저장소 첫 화면 아래에 자동으로 보여 주는 소개 문서.</li>
+    <li>파일을 열면 <b>History</b>(그 파일의 변경 이력)와 <b>Blame</b>(줄마다 누가 언제 바꿨는지)을 볼 수 있어요.</li>
+  </ul>
+
+  <h3>Settings 지도: 이번 과정에서 만지는 설정</h3>
+  <table class="gh-when">
+    <thead><tr><th>메뉴</th><th>내용</th><th>언제</th></tr></thead>
+    <tbody>
+      <tr><td><b>General</b></td><td>저장소 이름, Features(Issues·Wiki·Projects 켜고 끄기), Pull Requests(허용할 merge 방식, 병합 후 브랜치 자동 삭제), 맨 아래 <b>Danger Zone</b>(공개 범위 변경·이전·보관·삭제)</td><td>Step 6</td></tr>
+      <tr><td><b>Collaborators</b> (조직은 Collaborators and teams)</td><td>다른 사람을 초대하고 권한(역할)을 줌</td><td>팀으로 할 때</td></tr>
+      <tr><td><b>Rules → Rulesets</b> (또는 Branches)</td><td>main 브랜치 보호: PR 없이 push 금지, 승인 필수 등</td><td>Step 6-6</td></tr>
+      <tr><td><b>Actions → General</b></td><td>어떤 Action을 허용할지, 워크플로우 토큰(GITHUB_TOKEN) 기본 권한, fork PR 실행 승인</td><td>Step 3</td></tr>
+      <tr><td><b>Environments</b></td><td>배포 환경(승인자·허용 브랜치). Pages를 Actions로 켜면 <code>github-pages</code>가 자동 생성</td><td>Step 4</td></tr>
+      <tr><td><b>Pages</b></td><td>사이트 배포 방식(Source)과 주소</td><td>Step 4</td></tr>
+      <tr><td><b>Secrets and variables → Actions</b></td><td>API 키 같은 비밀 값 보관(값은 다시 볼 수 없음)</td><td>Step 6-3</td></tr>
+    </tbody>
+  </table>
+
+  <h3>권한: 누가 무엇을 할 수 있나</h3>
+  <p>
+    <b>개인 계정 저장소</b>는 단순해요. 주인(owner) 한 명과, 주인이 <b>Settings → Collaborators → Add people</b>로 초대한 협업자(collaborator)가 있고,
+    협업자는 초대를 <b>수락</b>해야 push할 수 있습니다(설정 변경은 주인만).
+    <b>조직(Organization) 저장소</b>는 사람·팀마다 아래 역할 중 하나를 줍니다.
+  </p>
+  <table>
+    <thead><tr><th>역할</th><th>할 수 있는 일</th><th>이런 사람에게</th></tr></thead>
+    <tbody>
+      <tr><td>Read</td><td>코드 보기·clone, 이슈·PR 작성과 댓글</td><td>구경만 하는 사람</td></tr>
+      <tr><td>Triage</td><td>Read + 이슈·PR 정리(라벨, 담당자, 닫기). 코드 push는 불가</td><td>이슈 관리 담당</td></tr>
+      <tr><td><b>Write</b></td><td>브랜치 push, PR 병합, 이슈·PR 관리</td><td>개발자 (이 과정의 gate job은 <b>Write 이상</b>만 통과)</td></tr>
+      <tr><td>Maintain</td><td>Write + 일부 설정(Features 등). 위험한 설정은 불가</td><td>프로젝트 관리자</td></tr>
+      <tr><td>Admin</td><td>모든 설정(공개 범위, 권한, Secrets, 삭제)</td><td>저장소 책임자</td></tr>
+    </tbody>
+  </table>
+  <div class="callout callout-warn">
+    <span class="callout-title">⚠️ Public 저장소에서 "누구나" 할 수 있는 것</span>
+    로그인한 사람이라면 누구나 코드 보기·clone·fork, <b>이슈 열기</b>, (fork를 통한) PR 열기를 할 수 있어요. push와 설정 변경만 막혀 있습니다.
+    그래서 Step 3의 워크플로우는 "이슈를 연 사람이 이 저장소에 쓰기 권한이 있는지"를 먼저 확인합니다.
+  </div>
+
+  <h3>공개 범위는 나중에 바꿀 수 있어요</h3>
+  <p>
+    <b>Settings → General → Danger Zone → Change repository visibility</b>에서 Public ↔ Private을 바꿀 수 있습니다.
+    다만 무료 계정에서 Private으로 바꾸면 <b>GitHub Pages를 쓸 수 없게 되고</b>(Pages는 유료 플랜부터 Private 지원), Actions도 무료 사용량을 차감하기 시작해요.
+    한 번 공개됐던 내용은 이미 누군가 복사했을 수 있으니, 비밀이 섞였다면 공개 범위를 바꾸는 것만으로는 부족합니다(비밀 값 자체를 교체해야 해요).
+  </p>
+  <figure class="shot" data-src="assets/img/screens/github-settings-menu.png">
+    <figcaption>Settings 왼쪽 메뉴 — General, Collaborators, Rules, Actions, Environments, Pages, Secrets and variables</figcaption>
+  </figure>
+</section>
+
+<h2>1-3. Claude Code 시작하기</h2>
 <p>저장소 폴더 안에서 Claude Code를 실행합니다. Claude Code는 <b>현재 폴더의 파일을 읽고, 명령을 실행하고, 파일을 고칠 수 있는</b> AI 코딩 도구예요.</p>
 <pre data-lang="bash">claude</pre>
 <figure class="shot" data-src="assets/img/screens/claude-code-start.png">
@@ -129,7 +205,7 @@ cd excel-dashboard</pre>
   </ol>
 </div>
 
-<h2>1-3. 첫 프롬프트: 프로젝트 설명서(CLAUDE.md) 만들기</h2>
+<h2>1-4. 첫 프롬프트: 프로젝트 설명서(CLAUDE.md) 만들기</h2>
 <p><code>CLAUDE.md</code>는 Claude Code가 매번 읽는 "프로젝트 설명서"입니다. 이걸 먼저 만들어 두면 이후 프롬프트가 훨씬 짧아져요.</p>
 <figure class="prompt-card">
   <figcaption>프롬프트 1 · 프로젝트 설명서 만들기</figcaption>
@@ -202,6 +278,8 @@ git push</pre>
   </dl>
   <h3>🔍 확인하고 넘어가기</h3>
   <ul class="checklist" data-checklist="wrapup-github">
+    <li>저장소 탭(Code·Issues·Pull requests·Actions·Settings)이 각각 무슨 곳인지, Settings에서 공개 범위·협업자·Pages·Secrets 메뉴를 찾을 수 있다</li>
+    <li>Read·Write·Admin 역할의 차이와, Public 저장소에서 누구나 이슈를 열 수 있다는 점을 설명할 수 있다</li>
     <li>GitHub 저장소 화면에서 <code>CLAUDE.md</code>와 "프로젝트 설명서 추가" 커밋이 보인다</li>
     <li><code>git remote -v</code>에서 <code>origin</code>이 내 GitHub 저장소 주소로 나온다</li>
     <li><code>CLAUDE.md</code>를 직접 열어 서비스 개요·폴더 구조·규칙이 들어 있는지 읽어 봤다</li>

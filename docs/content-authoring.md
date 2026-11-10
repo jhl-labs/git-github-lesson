@@ -23,6 +23,7 @@
 | 위젯 | `<div data-widget="hash-generator"></div>` | `assets/js/widgets/<이름>.js`의 `mount(node)` |
 | 시작 전 이론 | `<section class="theory"><h2>📚 시작 전 이론: …</h2> … <dl class="theory-terms"><div><dt>용어</dt><dd>설명</dd></div></dl> … <div class="theory-check">셀프 체크</div></section>` | 각 Step 맨 위, lede 바로 아래 |
 | Step 마무리 | `<section class="wrapup"><h2>🏁 마무리: …</h2>` 한 일(`ol.steps`) · 결과물 · 핵심 정리(`dl.theory-terms`) · 확인 체크리스트(`data-checklist="wrapup-<id>"`) · `<div class="wrapup-next">` 다음 Step</section>` | 각 Step 맨 끝 |
+| GitHub 화면 익히기 | `<section class="gh-guide">` (탭 모양 칩: `<div class="gh-tabs"><span class="is-key">…</span></div>`) | GitHub 초심자가 그 Step에서 처음 만나는 화면·설정·개념. Step 1(저장소·Settings·권한), 3(Issues·Actions 탭), 5(이슈 화면), 6(PR 화면) |
 | 같은 페이지 앵커 링크 | `<a href="#/페이지id#요소id">` | 라우터가 다시 그리지 않고 해당 위치로 스크롤 |
 
 ## Git 미션 추가
