@@ -126,7 +126,12 @@
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v7
-      # ... JSON 합치기 → docs 브랜치에 push</pre>
+      # ... JSON 합치기 → docs 브랜치에 push
+
+  deploy:                             # GITHUB_TOKEN push로는 Pages가 갱신되지 않으니 배포 워크플로우 호출
+    needs: publish
+    permissions: { contents: read, pages: write, id-token: write, actions: read }
+    uses: ./.github/workflows/pages-deploy.yml</pre>
 <div class="callout">
   <span class="callout-title">핵심 메시지</span>
   CI/CD의 가치는 "자동으로 돈다"가 아니라 <b>"빠르고, 싸고, 똑같이, 동시에 많이"</b> 돈다는 데 있습니다. 특정 OS·GUI 앱에 묶이면 그 장점을 대부분 잃어요.
@@ -139,5 +144,5 @@
   <li><b>테스트 자동화</b> — PR마다 <code>pytest</code>를 돌리는 워크플로우 추가 (Linux!)</li>
   <li><b>워크플로우 보안 학습</b> — <code>permissions</code> 최소화, Action 버전 SHA 고정, Dependabot</li>
   <li><b>작은 백엔드 만들어 보기</b> — FastAPI/Express로 로그인 + 데이터 API, 컨테이너로 배포</li>
-  <li><b>Git 더 깊이</b> — <code>rebase</code>, <code>stash</code>, <code>cherry-pick</code>, <code>revert</code> (이미 push한 커밋을 안전하게 되돌리는 법)</li>
+  <li><b>Git 더 깊이</b> — <code>rebase</code>, <code>stash</code>, <code>cherry-pick</code>, <code>reflog</code> (잃어버린 커밋 되찾기). <code>revert</code>·<code>reset</code>은 실습실 미션 8·9에서 다뤘어요</li>
 </ul>

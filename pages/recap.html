@@ -23,10 +23,10 @@
 <table>
   <thead><tr><th>Step</th><th>한 일</th><th>만든 결과물</th><th>배운 개념</th></tr></thead>
   <tbody>
-    <tr><td>PART 1 · Git 실습실</td><td>브라우저 안 실습실에서 Git 명령을 직접 쳐 보며 미션 수행</td><td>(연습용 저장소)</td><td>작업 디렉터리·스테이징·저장소·원격, 브랜치와 병합, 충돌 해결, clone, 되돌리기</td></tr>
+    <tr><td>PART 1 · Git 실습실</td><td>브라우저 안 실습실에서 Git 명령을 직접 쳐 보며 미션 수행</td><td>(연습용 저장소)</td><td>미션 9개 — 작업 디렉터리·스테이징·저장소, 브랜치와 병합, checkout, 충돌 해결, 원격(push·fetch·pull), clone 협업, 되돌리기(restore·revert·reset)</td></tr>
     <tr><td>Step 1 · 저장소와 Claude Code</td><td>GitHub에 Public 저장소를 만들고 clone, Claude Code로 프로젝트 설명서 작성</td><td><code>CLAUDE.md</code>, 첫 push</td><td>Git vs GitHub, origin, 인증(gh·토큰·SSH), Public/Private, Claude Code의 작업 방식</td></tr>
     <tr><td>Step 2 · 변환기</td><td>엑셀을 JSON으로 바꾸는 스크립트와 테스트 작성, 기능 브랜치에서 작업 후 merge</td><td><code>scripts/excel_to_json.py</code>, <code>tests/</code>, <code>requirements.txt</code></td><td>.xlsx 구조, JSON 타입, xlwings vs openpyxl, 수식·날짜 함정, venv·pytest</td></tr>
-    <tr><td>Step 3 · Actions</td><td>이슈 폼과 이슈 → 변환 → 배포 워크플로우 작성, 라벨·권한 설정</td><td><code>excel-to-dashboard.yml</code>, 이슈 템플릿, <code>fetch_attachment.py</code>, <code>publish_docs.sh</code></td><td>event·job·step·runner, 실제 VM의 일회성, YAML, <code>${{ }}</code>, permissions, 인젝션 방어</td></tr>
+    <tr><td>Step 3 · Actions</td><td>이슈 폼과 이슈 → 권한 확인 → 변환 → <code>docs</code> 커밋 워크플로우 작성, 라벨·권한 설정</td><td><code>excel-to-dashboard.yml</code>, 이슈 템플릿, <code>fetch_attachment.py</code>, <code>publish_docs.sh</code></td><td>event·job·step·runner, 실제 VM의 일회성, YAML, <code>${{ }}</code>, permissions, gate job(권한 API), <code>PYTHONUTF8</code>, 인젝션 방어</td></tr>
     <tr><td>Step 4 · Pages</td><td>비밀번호 화면이 있는 정적 대시보드를 만들고, Pages Source를 GitHub Actions로 켜서 <code>docs</code> 브랜치 내용을 배포</td><td><code>dashboard/</code>, <code>deploy-dashboard.yml</code>, <code>pages-deploy.yml</code>, Pages 사이트</td><td>정적 호스팅, fetch, 해시 ≠ 암호화, sessionStorage, orphan 브랜치·worktree, CDN 캐시</td></tr>
     <tr><td>Step 5 · 전체 실행</td><td>이슈로 엑셀을 올리고 Actions 로그를 따라가며 결과 확인·문제 해결</td><td><code>docs</code>의 데이터 커밋, 동작하는 대시보드</td><td>이슈 폼 → 마크다운, 이벤트 페이로드, 로그·annotation, Re-run의 함정, 멱등성·concurrency</td></tr>
     <tr><td>Step 6 · PR과 AI 리뷰</td><td>기능 브랜치로 PR을 열고 AI 에이전트로 리뷰, 자동 리뷰 워크플로우 추가 후 squash merge</td><td>PR, 리뷰 댓글, <code>ai-review.yml</code></td><td>PR·diff·리뷰 상태, merge 방법 3가지, 브랜치 보호, headless <code>claude -p</code>, AI 리뷰의 한계</td></tr>
@@ -38,7 +38,7 @@
   <div class="card card-remote"><span class="card-icon">📁</span><h3>Repository</h3><p>소스 코드(<code>main</code>)와 배포 결과물(<code>docs</code>)을 브랜치로 나눠 보관. 데이터 변경 이력도 커밋으로 남았어요.</p></div>
   <div class="card card-work"><span class="card-icon">🐛</span><h3>Issues</h3><p>엑셀 업로드 창구이자 자동화의 방아쇠. 결과 알림(봇 댓글)도 여기로 돌아왔어요.</p></div>
   <div class="card card-repo"><span class="card-icon">⚙️</span><h3>Actions</h3><p>이벤트가 생길 때만 실제 서버를 띄워 변환·배포·리뷰를 실행한 일꾼.</p></div>
-  <div class="card card-remote"><span class="card-icon">🌐</span><h3>Pages</h3><p><code>docs</code> 브랜치의 파일을 HTTPS 웹사이트로 공개한 정적 호스팅.</p></div>
+  <div class="card card-remote"><span class="card-icon">🌐</span><h3>Pages</h3><p><code>docs</code> 브랜치의 파일을 Actions 배포(<code>pages-deploy.yml</code>)로 받아 HTTPS 웹사이트로 공개한 정적 호스팅.</p></div>
   <div class="card card-stage"><span class="card-icon">🔀</span><h3>Pull Request</h3><p>합치기 전에 diff를 보여주고 사람·AI 리뷰를 받는 관문.</p></div>
   <div class="card card-work"><span class="card-icon">🔑</span><h3>Secrets · GITHUB_TOKEN</h3><p>API 키는 Secret으로, 저장소 쓰기는 최소 권한의 임시 토큰으로 처리했어요.</p></div>
 </div>

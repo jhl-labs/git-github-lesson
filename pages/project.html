@@ -60,7 +60,7 @@
 
 <h2>전체 구조</h2>
 <figure class="diagram">
-  <svg viewBox="0 0 760 330" role="img" aria-label="사용자가 이슈에 엑셀을 올리면 GitHub이 클라우드에 새로 만든 실제 Windows 서버(runner)가 xlwings로 변환해 docs 브랜치에 커밋하고 Pages가 대시보드를 서빙하는 구조도">
+  <svg viewBox="0 0 760 330" role="img" aria-label="사용자가 이슈에 엑셀을 올리면 GitHub이 클라우드에 새로 만든 실제 Windows 서버(runner)가 xlwings(안 되면 openpyxl)로 변환해 docs 브랜치에 커밋하고, deploy job이 docs 브랜치를 Pages에 배포해 대시보드를 보여 주는 구조도">
     <defs>
       <marker id="pa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="var(--ink-2)" /></marker>
     </defs>
@@ -78,7 +78,7 @@
     <rect x="250" y="108" width="220" height="108" rx="10" fill="var(--bg-elev)" stroke="var(--line-strong)" />
     <text x="262" y="130" font-size="12.5" font-weight="700">🪟 Windows runner (실제 VM)</text>
     <text x="262" y="152" font-size="12.5" class="d-mono">1. 첨부 엑셀 다운로드</text>
-    <text x="262" y="172" font-size="12.5" class="d-mono">2. xlwings로 읽기</text>
+    <text x="262" y="172" font-size="12.5" class="d-mono">2. xlwings(→openpyxl)로 읽기</text>
     <text x="262" y="192" font-size="12.5" class="d-mono">3. data.json 생성</text>
     <text x="262" y="208" font-size="12.5" class="d-mono">4. docs 브랜치에 push</text>
 
@@ -103,7 +103,7 @@
     <text x="203" y="92" text-anchor="middle" class="d-sub">트리거</text>
     <text x="515" y="88" text-anchor="middle" class="d-sub">코드</text>
     <text x="515" y="182" text-anchor="middle" class="d-sub">커밋</text>
-    <text x="680" y="252" class="d-sub">서빙</text>
+    <text x="680" y="252" class="d-sub">배포</text>
     <text x="40" y="300" font-size="22">👩‍💼</text>
     <text x="72" y="296" font-size="13" font-weight="700">팀원: 브라우저로 접속해</text>
     <text x="72" y="314" font-size="13" font-weight="700">비밀번호 입력 후 확인</text>
@@ -117,9 +117,9 @@
   <thead><tr><th>요구 사항</th><th>사용하는 GitHub 기능</th><th>배우는 개념</th></tr></thead>
   <tbody>
     <tr><td>엑셀 파일을 쉽게 올리고 싶다</td><td><b>Issues</b> (파일 첨부 + 이슈 템플릿)</td><td>이벤트(이슈 생성)가 자동화를 깨운다</td></tr>
-    <tr><td>엑셀을 사람 손 없이 변환하고 싶다</td><td><b>Actions</b> + Windows runner + xlwings</td><td>워크플로우, 트리거, runner, 권한</td></tr>
+    <tr><td>엑셀을 사람 손 없이 변환하고 싶다</td><td><b>Actions</b> + Windows runner + xlwings(안 되면 openpyxl)</td><td>워크플로우, 트리거, runner, 권한</td></tr>
     <tr><td>변환 결과를 버전 관리하고 싶다</td><td><b>Git</b> (docs 브랜치에 커밋)</td><td>브랜치의 다른 용도: 배포용 브랜치</td></tr>
-    <tr><td>웹에서 보고 싶다</td><td><b>Pages</b> (docs 브랜치를 웹으로 서빙)</td><td>정적 호스팅</td></tr>
+    <tr><td>웹에서 보고 싶다</td><td><b>Pages</b> (deploy job이 docs 브랜치 내용을 배포)</td><td>정적 호스팅</td></tr>
     <tr><td>아무나 보면 안 된다</td><td>비밀번호 화면 (JavaScript)</td><td>…그런데 이게 진짜 보안일까? → <a href="#/limits">마지막 장</a></td></tr>
   </tbody>
 </table>
@@ -127,7 +127,8 @@
 <div class="callout callout-warn">
   <span class="callout-title">🤔 왜 Windows + xlwings?</span>
   xlwings는 <b>실제 Microsoft Excel 프로그램을 원격 조종</b>해서 파일을 읽습니다. 수식·매크로가 많은 회사 엑셀을 "엑셀이 보여주는 그대로" 읽을 수 있다는 장점이 있지만,
-  Excel이 설치된 Windows(또는 macOS)가 필요합니다. 이번 실습은 일부러 이 구조를 택해 Actions의 OS 선택을 경험해 보고,
+  Excel이 설치된 Windows(또는 macOS)가 필요합니다. 그런데 GitHub이 제공하는 Windows runner에는 <b>Excel이 설치되어 있지 않아</b> xlwings가 실패하고,
+  변환기가 <b>openpyxl로 자동 대체</b>합니다(로그에 경고로 표시). 진짜 Excel로 읽으려면 Excel이 설치된 self-hosted runner가 필요해요. 이번 실습은 일부러 이 구조를 택해 Actions의 OS 선택을 경험해 보고,
   <a href="#/limits">마지막 장</a>에서 "실무라면 Linux에서 병렬로 처리하는 게 왜 더 나은지" 비교합니다.
 </div>
 
@@ -136,7 +137,7 @@
 ├── .github/
 │   ├── ISSUE_TEMPLATE/excel-upload.yml   ← "엑셀 업로드" 이슈 양식
 │   ├── workflows/
-│   │   ├── excel-to-dashboard.yml        ← 이슈 → 변환 → docs 브랜치 (Windows)
+│   │   ├── excel-to-dashboard.yml        ← 이슈 → 권한 확인 → 변환(Windows) → docs 브랜치 → 배포
 │   │   ├── deploy-dashboard.yml          ← 화면 코드 변경 시 재배포 (Linux)
 │   │   ├── pages-deploy.yml              ← docs 브랜치 → Pages 배포 (위 두 워크플로우가 호출)
 │   │   └── ai-review.yml                 ← PR 자동 코드 리뷰 (Linux)
@@ -167,7 +168,7 @@
     <div><dt>전체 구조</dt><dd>① 이슈에 엑셀 첨부 → ② Actions의 Windows runner(실제 VM)가 변환 → ③ 봇이 <code>docs</code> 브랜치에 커밋 → ④ Pages가 대시보드로 공개.</dd></div>
     <div><dt>왜 이런 구조인가</dt><dd>업로드 창구·처리 서버·데이터베이스·웹 서버를 각각 Issues·Actions runner·Git 커밋·Pages가 대신 맡아요. 평소엔 아무것도 돌지 않고, 이벤트가 생길 때만 일합니다.</dd></div>
     <div><dt>main과 docs</dt><dd><code>main</code>은 사람이 고치는 소스 코드, <code>docs</code>는 봇이 만드는 배포 결과물(<code>data/data.json</code> 포함). 브랜치를 용도별로 나눠 씁니다.</dd></div>
-    <div><dt>Windows + xlwings</dt><dd>실제 Excel을 조종하는 방식을 경험하려고 일부러 고른 구조예요. 실무에서 더 나은 방법은 <a href="#/limits">한계 장</a>에서 비교합니다.</dd></div>
+    <div><dt>Windows + xlwings</dt><dd>실제 Excel을 조종하는 방식을 경험하려고 일부러 고른 구조예요. 단, GitHub의 Windows runner에는 Excel이 없어 실제 변환은 openpyxl로 대체됩니다. 실무에서 더 나은 방법은 <a href="#/limits">한계 장</a>에서 비교합니다.</dd></div>
     <div><dt>최종 저장소 구조</dt><dd><code>.github/</code>(이슈 양식·워크플로우 4개), <code>scripts/</code>(변환·다운로드·배포), <code>dashboard/</code>(화면), <code>tests/</code>, <code>CLAUDE.md</code>. 막히면 <code>templates/excel-dashboard/</code>와 비교하세요.</dd></div>
   </dl>
   <h3>🔍 확인하고 넘어가기</h3>

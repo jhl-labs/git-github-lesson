@@ -136,16 +136,16 @@ cd excel-dashboard</pre>
   <pre>이 저장소에서 아래 서비스를 만들 거야. 먼저 프로젝트 설명서 CLAUDE.md 를 만들어줘. 코드는 아직 만들지 마.
 
 ## 서비스 개요
-- 사용자가 GitHub 이슈에 엑셀(.xlsx) 파일을 첨부해 등록하면
-- GitHub Actions의 windows-latest runner에서 xlwings로 엑셀을 읽어 JSON으로 변환하고
+- 사용자가 GitHub 이슈에 엑셀(.xlsx) 파일을 첨부해 등록하면 (제목이 [EXCEL]로 시작하고, 작성자가 저장소에 write 이상 권한이 있는 이슈만 처리)
+- GitHub Actions의 windows-latest runner에서 xlwings로 엑셀을 읽어 JSON으로 변환하고 (GitHub이 제공하는 runner에는 Excel이 없으므로 xlwings가 실패하면 openpyxl로 자동 대체)
 - 결과를 docs 브랜치의 data/data.json 으로 커밋한다
 - 같은 실행의 배포 job이 docs 브랜치 내용을 GitHub Pages에 배포하며(Pages Source: GitHub Actions), 비밀번호를 입력해야 대시보드(KPI, 차트, 표)를 볼 수 있다
 
 ## 폴더 구조
-- scripts/  : 파이썬 스크립트 (변환기, 첨부파일 다운로드, docs 브랜치 배포 스크립트)
+- scripts/  : 변환기·첨부파일 다운로드(파이썬), docs 브랜치에 결과를 반영하는 publish_docs.sh(bash)
 - dashboard/: Pages에 올라갈 정적 파일 (빌드 도구 없이 순수 HTML/CSS/JS)
 - tests/    : pytest 테스트
-- .github/  : 워크플로우와 이슈 템플릿
+- .github/  : 워크플로우(변환, 화면 재배포, Pages 배포용 재사용 워크플로우, AI 리뷰)와 이슈 템플릿
 
 ## 규칙
 - 사용자에게 보이는 문구와 주석은 한국어

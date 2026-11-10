@@ -377,11 +377,11 @@ gh issue list --label upload --state all --limit 20
 gh issue view 12 --comments
 
 # Actions
-gh run list --workflow convert.yml --limit 5
+gh run list --workflow excel-to-dashboard.yml --limit 5
 gh run watch                             # 진행 중인 실행을 골라 실시간 추적
 gh run view --log-failed                 # 실패한 step의 로그만
 gh run rerun 123456789 --failed          # 실패한 job만 재실행
-gh workflow run convert.yml -f sheet=2026-11   # workflow_dispatch 수동 실행
+gh workflow run pages-deploy.yml              # workflow_dispatch 수동 실행 (PART 2: Pages 재배포)
 gh secret set API_KEY &lt; ./key.txt        # 값을 명령 인자가 아니라 표준 입력으로 (셸 기록에 안 남게)
 
 # 저장소
@@ -445,7 +445,7 @@ gh extension install owner/gh-something   # 확장은 제3자 코드이므로 �
   contents: read
   packages: write
 steps:
-  - uses: actions/checkout@v4
+  - uses: actions/checkout@v6
   - uses: docker/login-action@v3
     with:
       registry: ghcr.io

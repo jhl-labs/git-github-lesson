@@ -66,7 +66,7 @@
   <tbody>
     <tr><td>원리</td><td>지정한 브랜치의 <code>/(root)</code> 또는 <code>/docs</code> 폴더를 그대로(또는 Jekyll로 빌드해) 게시</td><td>워크플로우가 만든 <b>Pages artifact</b>(tar)를 배포</td></tr>
     <tr><td>빌드</td><td>GitHub의 Jekyll 빌드만 가능 (플러그인 허용 목록 제한)</td><td>Vite, Hugo, Next.js export, Jekyll 최신 버전 등 무엇이든</td></tr>
-    <tr><td>산출물 커밋</td><td>필요 (PART 2의 <code>docs</code> 브랜치처럼)</td><td>불필요. 저장소 이력이 깨끗함</td></tr>
+    <tr><td>산출물 커밋</td><td>필요 (게시할 파일이 브랜치에 있어야 함)</td><td>불필요. 저장소 이력이 깨끗함 (PART 2는 데이터 변경 이력을 남기려고 결과물을 일부러 <code>docs</code> 브랜치에 커밋한 뒤, 그 브랜치를 Actions로 배포)</td></tr>
     <tr><td>배포 트리거</td><td>그 브랜치에 push될 때마다 자동. <b>단, <code>GITHUB_TOKEN</code>으로 push한 커밋은 빌드를 시작하지 않음</b></td><td>워크플로우의 <code>on:</code>로 자유롭게</td></tr>
     <tr><td>CNAME 파일</td><td>설정에서 도메인을 넣으면 브랜치에 커밋됨</td><td>사용 안 함 (설정 화면 값이 기준)</td></tr>
     <tr><td>빌드 횟수 soft limit</td><td>시간당 10회</td><td>적용 안 됨</td></tr>
@@ -105,8 +105,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with: { node-version: "22", cache: npm }
       - run: npm ci &amp;&amp; npm run build          # 결과물이 dist/ 에 생긴다고 가정
       - uses: actions/configure-pages@v6
@@ -126,7 +126,7 @@ jobs:
 <ul>
   <li>빌드 Job과 배포 Job을 나누면, 배포 Job만 <code>pages: write</code>를 갖도록 Job 단위 권한으로 더 좁힐 수 있습니다.</li>
   <li><code>github-pages</code> environment에는 기본적으로 "배포 가능한 브랜치" 규칙이 걸립니다. 다른 브랜치에서 배포하려다 거절되면 <b>Settings → Environments → github-pages</b>를 확인하세요.</li>
-  <li><code>upload-pages-artifact</code>는 v4부터 <b>숨김 파일(dotfile)을 기본 제외</b>합니다. <code>.well-known/</code> 같은 경로가 필요하면 최신 버전의 <code>include-hidden-files</code> 옵션을 확인하세요.</li>
+  <li><code>upload-pages-artifact</code>는 v4부터 <b>숨김 파일(dotfile)을 기본 제외</b>합니다(그래서 PART 2의 <code>.nojekyll</code>도 실제로는 올라가지 않지만, Actions 배포에선 필요 없으므로 문제없습니다). <code>.well-known/</code> 같은 경로가 필요하면 <code>include-hidden-files: true</code> 입력을 쓰세요(<code>.git</code>·<code>.github</code>는 항상 제외).</li>
   <li>예시의 버전 태그는 작성 시점 기준입니다. 실무에서는 각 Action의 최신 릴리스를 확인하고 <b>커밋 SHA로 고정</b>하세요(<a href="#/expert-actions">Actions 깊이 알기</a> 8절).</li>
 </ul>
 
@@ -195,7 +195,7 @@ dig www.example.com +noall +answer
 <table>
   <thead><tr><th>지연 원인</th><th>설명</th><th>대응</th></tr></thead>
   <tbody>
-    <tr><td>배포 워크플로우 진행 중</td><td>push 후 build·deploy에 수십 초~수 분</td><td>Actions 탭·Deployments에서 완료 확인</td></tr>
+    <tr><td>배포 워크플로우 진행 중</td><td>push 후 build·deploy에 수십 초~수 분 (PART 2 실측: Pages deploy Job 약 15초, 이슈 등록부터 반영까지 약 1~2분)</td><td>Actions 탭·Deployments에서 완료 확인</td></tr>
     <tr><td>CDN 캐시</td><td>엣지 서버가 이전 파일을 잠시 들고 있음</td><td>몇 분 기다리기. 사용자에게 강제할 방법은 없음</td></tr>
     <tr><td>브라우저 캐시</td><td><code>max-age</code> 동안 브라우저가 재요청하지 않음</td><td>강력 새로고침, 개발자 도구의 "Disable cache"</td></tr>
   </tbody>
@@ -318,7 +318,7 @@ cp dist/index.html dist/404.html   # 상태 코드는 여전히 404 라는 점�
 <table>
   <thead><tr><th>증상</th><th>가능한 원인</th><th>확인·해결</th></tr></thead>
   <tbody>
-    <tr><td>사이트 전체가 404</td><td>Pages 설정에서 브랜치/폴더 미선택, 게시 폴더 최상단에 <code>index.html</code> 없음, 배포 실패</td><td>Settings → Pages 상태 메시지, Actions의 "pages build and deployment" 로그</td></tr>
+    <tr><td>사이트 전체가 404</td><td>Pages Source 미설정(PART 2는 "GitHub Actions"여야 함), 게시 폴더 최상단에 <code>index.html</code> 없음, 배포 실패</td><td>Settings → Pages 상태 메시지, 브랜치 게시면 Actions의 "pages build and deployment" 로그, Actions 게시면 배포 워크플로우(PART 2는 <code>deploy</code> Job / <code>Deploy Pages</code>) 로그</td></tr>
     <tr><td>로컬에선 되는데 Pages에서 특정 파일 404</td><td><b>대소문자</b> 불일치 (<code>Logo.png</code> vs <code>logo.png</code>). Windows·macOS는 구분 안 하지만 Pages는 구분</td><td><code>git ls-files</code>로 실제 이름 확인, <code>git mv</code>로 이름 변경</td></tr>
     <tr><td><code>_</code>로 시작하는 폴더만 404</td><td>Jekyll이 무시</td><td><code>.nojekyll</code> 추가 또는 Actions 게시로 전환</td></tr>
     <tr><td>CSS·JS가 안 불러와짐 (Project 사이트)</td><td>절대 경로 <code>/assets/app.js</code>가 <code>you.github.io/assets/…</code>를 가리킴</td><td>상대 경로(<code>assets/app.js</code>) 사용 또는 빌드 도구에 base path 지정</td></tr>

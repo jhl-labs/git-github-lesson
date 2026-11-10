@@ -4,7 +4,7 @@
 <section class="theory">
   <h2>📚 시작 전 이론: 정적 호스팅과 브라우저 속 로그인</h2>
   <p>
-    GitHub Pages는 저장소의 특정 브랜치(또는 폴더)에 있는 파일을 <code>https://아이디.github.io/저장소이름/</code> 주소로 그대로 공개하는 <b>정적 호스팅</b>입니다.
+    GitHub Pages는 저장소의 브랜치(또는 Actions 워크플로우가 올려 준 파일 묶음)에 있는 파일을 <code>https://아이디.github.io/저장소이름/</code> 주소로 그대로 공개하는 <b>정적 호스팅</b>입니다.
     "정적"이라는 말이 이 Step의 모든 설계를 결정해요. 서버가 요청마다 프로그램을 실행하는 게 아니라, <b>파일을 있는 그대로 내려줄 뿐</b>입니다.
   </p>
   <dl class="theory-terms">
@@ -67,7 +67,7 @@ const data = await res.json();   // 텍스트 JSON → JavaScript 객체</pre>
   <ul>
     <li><b>orphan 브랜치</b> — <code>git checkout --orphan docs</code>로 만들면 main의 기록 없이 빈 상태에서 시작해, 배포 결과물만 깔끔하게 담깁니다.</li>
     <li><b>git worktree</b> — 한 저장소에서 <b>두 번째 작업 폴더</b>를 열어 다른 브랜치를 동시에 꺼내 두는 기능. main 폴더를 건드리지 않고 임시 폴더에서 <code>docs</code>를 고쳐 커밋할 수 있어요.</li>
-    <li><b>.nojekyll</b> — Pages는 기본적으로 Jekyll(정적 사이트 생성기)로 파일을 가공하는데, 이 빈 파일이 있으면 가공 없이 그대로 공개합니다. (<code>_</code>로 시작하는 파일이 사라지는 문제도 막아요)</li>
+    <li><b>.nojekyll</b> — "Deploy from a branch" 방식의 Pages는 기본적으로 Jekyll(정적 사이트 생성기)로 파일을 가공하는데, 이 빈 파일이 있으면 가공 없이 그대로 공개합니다(<code>_</code>로 시작하는 파일이 사라지는 문제도 막아요). 우리처럼 <b>GitHub Actions로 배포</b>하면 올린 파일이 그대로 공개되므로 사실 필요 없지만, 나중에 브랜치 배포로 바꿔도 안전하도록 넣어 둡니다.</li>
     <li><b>CDN 캐시</b> — Pages는 전 세계 캐시 서버(CDN)를 거쳐 전달돼서, 새 배포 후에도 잠시(보통 몇 분) 옛 파일이 보일 수 있어요. 대시보드가 <code>cache: 'no-store'</code>와 주소 뒤 <code>?t=시각</code>을 붙이는 이유입니다.</li>
   </ul>
 
@@ -108,13 +108,14 @@ const data = await res.json();   // 텍스트 JSON → JavaScript 객체</pre>
 
 ## Pages 배포 워크플로우 (Settings → Pages → Source 는 "GitHub Actions")
 GITHUB_TOKEN 으로 push 한 커밋은 Pages 빌드를 트리거하지 않으니, 배포를 워크플로우에서 직접 해야 해.
-- .github/workflows/pages-deploy.yml: on: workflow_call + workflow_dispatch. ubuntu-latest 에서 docs 브랜치를 checkout →
-  actions/configure-pages → actions/upload-pages-artifact(path: .) → actions/deploy-pages. environment: github-pages,
-  permissions: contents read / pages write / id-token write, concurrency group: pages
-- .github/workflows/deploy-dashboard.yml: main 의 dashboard/** 가 바뀌면 publish job(ubuntu-latest)이 scripts/publish_docs.sh 로
+- .github/workflows/pages-deploy.yml: on: workflow_call + workflow_dispatch. ubuntu-latest 에서 docs 브랜치를 actions/checkout@v6 (ref: docs) →
+  actions/configure-pages@v6 → actions/upload-pages-artifact@v5(path: .) → actions/deploy-pages@v5. environment: github-pages(url 은 배포 결과 page_url),
+  permissions: contents read / pages write / id-token write / actions read, concurrency group: pages
+- .github/workflows/deploy-dashboard.yml: main 의 dashboard/** 또는 scripts/publish_docs.sh 가 바뀌면 publish job(ubuntu-latest, permissions contents write,
+  concurrency group: dashboard-data)이 scripts/publish_docs.sh 로
   docs 브랜치에 반영(데이터는 유지)하고, 이어서 deploy job 이 pages-deploy.yml 을 호출. workflow_dispatch 로 수동 실행도 가능하게
 - Step 3 의 excel-to-dashboard.yml 끝에도 같은 deploy job(needs: convert, uses: ./.github/workflows/pages-deploy.yml)을 추가
-  (호출하는 job 에 permissions: contents read, pages write, id-token write 를 줄 것)
+  (호출하는 deploy job 에 permissions: contents read, pages write, id-token write, actions read 를 줄 것)
 
 마지막으로 로컬에서 확인하는 방법을 알려줘.</pre>
 </figure>
@@ -174,7 +175,7 @@ git switch main && git merge feature/dashboard && git push</pre>
   <h3>📦 만들어진 결과물</h3>
   <ul>
     <li><code>dashboard/index.html</code>, <code>app.js</code>, <code>style.css</code>, <code>config.js</code> — 로그인 화면, KPI 카드, 막대 차트, 검색 표</li>
-    <li><code>.github/workflows/pages-deploy.yml</code> — <code>docs</code> checkout → upload-pages-artifact → deploy-pages (재사용 워크플로우)</li>
+    <li><code>.github/workflows/pages-deploy.yml</code> — <code>docs</code> checkout → configure-pages → upload-pages-artifact → deploy-pages (재사용 워크플로우)</li>
     <li><code>.github/workflows/deploy-dashboard.yml</code> — <code>dashboard/**</code> 변경 시 publish job + deploy job</li>
     <li><code>excel-to-dashboard.yml</code>에 추가된 <code>deploy</code> job (<code>needs: convert</code>)</li>
     <li>새 <code>docs</code> 브랜치(orphan) — 대시보드 파일 + <code>.nojekyll</code>, 공개 주소 <code>https://&lt;아이디&gt;.github.io/excel-dashboard/</code></li>

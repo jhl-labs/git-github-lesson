@@ -159,21 +159,21 @@ gh run list --limit 3 으로 실패한 실행을 찾고, gh run view &lt;id&gt; 
   <h3>📦 만들어진 결과물</h3>
   <ul>
     <li><code>[EXCEL]</code> 이슈 1건 — 봇의 결과 댓글(Pages 주소·실행 로그 링크)과 함께 닫힘</li>
-    <li>Actions 실행 기록 — <code>convert</code>(Windows) → <code>deploy</code> job</li>
+    <li>Actions 실행 기록 — <code>gate</code>(Linux) → <code>convert</code>(Windows) → <code>deploy</code> job</li>
     <li><code>docs</code> 브랜치의 새 커밋 "data: 이슈 #N 엑셀 반영" — <code>data/data.json</code> 추가</li>
     <li>데이터가 채워진 대시보드 <code>https://&lt;아이디&gt;.github.io/excel-dashboard/</code></li>
   </ul>
   <h3>💡 핵심 정리</h3>
   <dl class="theory-terms">
     <div><dt>이슈 폼 = 마크다운</dt><dd>제출된 본문은 텍스트일 뿐이라, 스크립트가 <code>.xlsx</code> 첨부 링크를 글자로 찾아 내려받아요.</dd></div>
-    <div><dt>이벤트 페이로드</dt><dd><code>if:</code> 조건과 <code>env:</code>에 쓰는 이슈 제목·본문·<code>author_association</code>은 모두 <code>github.event</code>에서 옵니다.</dd></div>
+    <div><dt>이벤트 페이로드</dt><dd><code>if:</code> 조건과 <code>env:</code>에 쓰는 이슈 제목·본문·작성자(<code>issue.user.login</code>)는 모두 <code>github.event</code>에서 옵니다.</dd></div>
     <div><dt>로그 읽는 요령</dt><dd>빨간 X가 붙은 step의 마지막 몇 줄부터 봅니다. Skipped는 실패가 아니라 <code>if:</code> 조건이 거짓이었다는 뜻이에요.</dd></div>
     <div><dt>Re-run의 함정</dt><dd>Re-run은 처음과 같은 커밋으로 다시 돌아요. 코드를 고쳤다면 새 이슈를 올려야 반영됩니다.</dd></div>
     <div><dt>봇도 Git 커밋</dt><dd>데이터 변경이 <code>docs</code> 커밋으로 남아 이력 추적과 되돌리기가 되고, <code>concurrency</code>가 동시 push 충돌을 막아요.</dd></div>
   </dl>
   <h3>🔍 확인하고 넘어가기</h3>
   <ul class="checklist" data-checklist="wrapup-step-run">
-    <li>Actions 실행에서 <code>convert</code>와 <code>deploy</code> job이 모두 성공했다</li>
+    <li>Actions 실행에서 <code>gate</code>·<code>convert</code>·<code>deploy</code> job이 모두 성공했다</li>
     <li>이슈에 봇 댓글이 달리고 이슈가 닫혔다</li>
     <li>대시보드에 KPI·차트·표가 보이고, 원본 파일명·변환 엔진(openpyxl)이 표시된다</li>
     <li><code>git log --oneline origin/docs</code>에서 봇의 데이터 커밋을 찾았다</li>

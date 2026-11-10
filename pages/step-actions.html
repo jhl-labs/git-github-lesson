@@ -156,9 +156,10 @@ jobs:
   (repos/{repo}/collaborators/{작성자}/permission)을 확인해 admin/maintain/write 면 allowed=true 출력
   (author_association 은 비공개 조직 멤버가 CONTRIBUTOR 로 와서 쓰지 않는다)
 - convert job: needs: gate, allowed 가 true 일 때만. runs-on: windows-latest, timeout 20분,
-  env PYTHONUTF8: "1" (Windows 콘솔 cp1252 에서 한글 print 오류 방지), concurrency 그룹으로 동시 실행 방지
+  env PYTHONUTF8: "1" (Windows 콘솔 cp1252 에서 한글 print 오류 방지)
+- 워크플로우 맨 위에 concurrency group: dashboard-data, cancel-in-progress: false (동시에 docs 브랜치에 push 하지 않게)
 - permissions: contents write, issues write 만
-- 단계: checkout → setup-python 3.12(pip 캐시) → 의존성 설치 → 첨부 다운로드 → 변환(--engine auto) → publish_docs.sh(bash) → 이슈에 Pages 주소와 실행 로그 링크를 댓글로 달고 이슈 닫기
+- 단계: actions/checkout@v6 → actions/setup-python@v6 3.12(pip 캐시) → 의존성 설치 → 첨부 다운로드 → 변환(--engine auto) → publish_docs.sh(bash) → 이슈에 Pages 주소와 실행 로그 링크를 댓글로 달고 이슈 닫기
 - 실패하면 이슈에 실패 댓글
 - 보안: github.event.issue.body/title 은 절대 run: 안에 직접 쓰지 말고 env 로 전달
 
@@ -217,12 +218,12 @@ git switch main && git merge feature/actions && git push</pre>
     <li><code>.github/ISSUE_TEMPLATE/excel-upload.yml</code> — 제목 기본값 <code>[EXCEL] </code>, 파일 칸 + 메모 칸, 공개 첨부 경고</li>
     <li><code>scripts/fetch_attachment.py</code> — 본문에서 첫 <code>.xlsx</code> 링크 찾기, 도메인·10MB·ZIP(<code>PK</code>) 검사</li>
     <li><code>scripts/publish_docs.sh</code> — git worktree로 <code>docs</code> 브랜치(없으면 orphan)에 커밋·push, 변경 없으면 종료</li>
-    <li><code>.github/workflows/excel-to-dashboard.yml</code> — <code>issues: opened</code>, <code>windows-latest</code>, 최소 권한, concurrency, 결과 댓글</li>
+    <li><code>.github/workflows/excel-to-dashboard.yml</code> — <code>issues: opened</code>, 권한을 확인하는 <code>gate</code> job(ubuntu) → <code>convert</code> job(<code>windows-latest</code>, <code>PYTHONUTF8</code>), 최소 권한, concurrency, 결과 댓글</li>
     <li>저장소 라벨 <code>excel-upload</code>, main 커밋 "이슈 기반 엑셀 변환 워크플로우 추가"</li>
   </ul>
   <h3>💡 핵심 정리</h3>
   <dl class="theory-terms">
-    <div><dt>Event → Job → Step</dt><dd>이슈가 열리는 이벤트가 워크플로우를 깨우고, <code>convert</code> job이 runner 한 대에서 step을 순서대로 실행합니다.</dd></div>
+    <div><dt>Event → Job → Step</dt><dd>이슈가 열리는 이벤트가 워크플로우를 깨우고, <code>gate</code> job이 통과시키면 <code>convert</code> job이 Windows runner 한 대에서 step을 순서대로 실행합니다(<code>needs:</code>로 순서를 정해요).</dd></div>
     <div><dt>runner는 일회용 VM</dt><dd>빈 컴퓨터로 시작해서 <code>actions/checkout</code>이 먼저 필요하고, 끝나면 사라지니 결과는 <code>docs</code> 브랜치 커밋으로 남겨요.</dd></div>
     <div><dt>최소 권한</dt><dd><code>permissions:</code>에 push용 <code>contents: write</code>, 댓글용 <code>issues: write</code>만 줬어요.</dd></div>
     <div><dt>문지기 gate job</dt><dd>제목이 <code>[EXCEL]</code>로 시작하고, 권한 API로 확인한 작성자 권한이 write 이상일 때만 변환. 공개 저장소의 아무나 데이터를 못 바꾸게 해요.</dd></div>

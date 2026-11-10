@@ -114,7 +114,8 @@ git switch -c feature/csv-download</pre>
 </p>
 <div class="tabs">
   <section data-tab="claude -p">
-    <pre data-lang="bash"># PR 번호가 1번이라면
+    <pre data-lang="bash"># PR 번호는 gh pr list 로 확인하세요. 이슈와 PR은 번호를 함께 쓰므로 Step 5의 이슈 때문에 1번이 아닐 수 있어요.
+# 아래는 PR 번호가 1번이라고 가정한 예시입니다.
 gh pr diff 1 | claude -p "이 PR diff를 시니어 개발자처럼 한국어로 리뷰해줘.
 보안(XSS, 비밀 정보 노출, 워크플로우 인젝션), 버그, 가독성 순서로
 '🔴 꼭 고칠 것 / 🟡 고치면 좋은 것 / 🟢 잘한 점' 형식으로, 파일:줄 위치와 수정 예시를 포함해줘." > review.md
@@ -144,7 +145,7 @@ gh pr comment 1 --body-file review.md</pre>
 <h2>6-3. PR이 열릴 때마다 자동 리뷰 (Actions)</h2>
 <p>CLI 리뷰를 워크플로우로 옮기면 PR마다 자동으로 리뷰 댓글이 달립니다.</p>
 <ol class="steps">
-  <li><strong>API 키를 Secret으로 등록</strong> — <a href="https://console.anthropic.com" target="_blank" rel="noopener">Anthropic Console</a>에서 키를 발급받아 저장소에 등록 (키는 화면·코드에 노출하지 마세요)
+  <li><strong>API 키를 Secret으로 등록</strong> — <a href="https://platform.claude.com" target="_blank" rel="noopener">Claude Console</a>에서 키를 발급받아 저장소에 등록 (키는 화면·코드에 노출하지 마세요)
     <pre data-lang="bash">gh secret set ANTHROPIC_API_KEY   # 실행 후 키를 붙여넣기 (입력은 화면에 보이지 않음)</pre>
   </li>
   <li><strong>워크플로우 만들기</strong>
@@ -152,9 +153,9 @@ gh pr comment 1 --body-file review.md</pre>
       <figcaption>프롬프트 7 · PR 자동 리뷰 워크플로우</figcaption>
       <pre>.github/workflows/ai-review.yml 을 만들어줘.
 - on: pull_request (opened, synchronize, reopened)
-- runs-on: ubuntu-latest, permissions: contents read, pull-requests write
+- runs-on: ubuntu-latest, timeout 10분, permissions: contents read, pull-requests write
 - 외부 fork 에서 온 PR 은 건너뛰기 (Secret 이 전달되지 않음)
-- Node 22 설치 → npm install -g @anthropic-ai/claude-code
+- actions/checkout@v6 → actions/setup-node@v6 로 Node 22 설치 → npm install -g @anthropic-ai/claude-code
 - gh pr diff 로 diff 를 파일로 저장하고, .github/review-prompt.md 를 프롬프트로 claude -p 에 diff 를 표준 입력으로 넘겨 리뷰 생성
 - ANTHROPIC_API_KEY Secret 이 비어 있으면 경고만 남기고 성공 종료
 - 결과를 "🤖 AI 코드 리뷰" 제목과 "최종 판단은 사람이" 안내를 붙여 gh pr comment 로 등록
@@ -191,7 +192,7 @@ document.getElementById('dash-title').innerHTML = config.title + ' - ' + state.s
 <pre data-lang="bash"># 지적 사항을 고친 뒤 같은 브랜치에 push → PR에 자동 반영
 git add . && git commit -m "리뷰 반영: CSV 이스케이프 보강" && git push
 
-gh pr merge 1 --squash --delete-branch   # 여러 커밋을 하나로 합쳐 main에 병합
+gh pr merge --squash --delete-branch   # 지금 브랜치의 PR을, 여러 커밋을 하나로 합쳐 main에 병합
 git switch main && git pull</pre>
 <p>main에 합쳐지면 <code>deploy-dashboard</code> 워크플로우가 실행되어 Pages에도 CSV 버튼이 생깁니다. <b>코드 리뷰 → 병합 → 자동 배포</b>, 실무 개발 흐름 한 바퀴를 완주했어요! 🎉</p>
 
@@ -204,10 +205,10 @@ git switch main && git pull</pre>
   <h3>✅ 이번 Step에서 한 일</h3>
   <ol class="steps">
     <li><strong>기능 브랜치에서 작업하고 PR 열기</strong> <code>feature/csv-download</code>에서 CSV 버튼을 만들고 <code>gh pr create</code>로 PR을 열었어요.</li>
-    <li><strong>CLI로 AI 리뷰</strong> <code>gh pr diff 1 | claude -p "..."</code>(또는 opencode)로 리뷰를 받아 <code>gh pr comment</code>로 PR에 남겼어요.</li>
+    <li><strong>CLI로 AI 리뷰</strong> <code>gh pr diff &lt;번호&gt; | claude -p "..."</code>(또는 opencode)로 리뷰를 받아 <code>gh pr comment</code>로 PR에 남겼어요.</li>
     <li><strong>자동 리뷰 워크플로우</strong> <code>ANTHROPIC_API_KEY</code>를 Secret으로 등록하고 <code>ai-review.yml</code>을 만들어 PR마다 리뷰가 달리게 했어요.</li>
     <li><strong>리뷰 연습</strong> innerHTML XSS와 이슈 제목 인젝션을 일부러 넣은 PR로 AI가 잡아내는지 확인하고, 그 PR은 merge하지 않고 닫았어요.</li>
-    <li><strong>리뷰 반영 후 Merge</strong> 고친 코드를 같은 브랜치에 push하고 <code>gh pr merge 1 --squash --delete-branch</code>로 합쳤어요.</li>
+    <li><strong>리뷰 반영 후 Merge</strong> 고친 코드를 같은 브랜치에 push하고 <code>gh pr merge --squash --delete-branch</code>로 합쳤어요.</li>
   </ol>
   <h3>📦 만들어진 결과물</h3>
   <ul>
