@@ -1,0 +1,6 @@
+.playwright-mcp/
+__pycache__/
+.pytest_cache/
+build/
+*.pyc
+.DS_Store
