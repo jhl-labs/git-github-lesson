@@ -1,0 +1,59 @@
+<h1>준비물 체크</h1>
+<p class="lede">PART 1(Git 실습실)은 브라우저만 있으면 됩니다. PART 2(실전 프로젝트)를 위해 아래를 미리 준비해 두세요.</p>
+
+<h2>필수 체크리스트</h2>
+<ul class="checklist" data-checklist="setup">
+  <li><b>GitHub 계정</b> — <a href="https://github.com/signup" target="_blank" rel="noopener">github.com/signup</a>에서 가입하고 이메일 인증까지 마치기</li>
+  <li><b>Git 설치</b> — 터미널에서 <code>git --version</code>이 버전을 출력하면 OK</li>
+  <li><b>GitHub CLI(gh) 설치 &amp; 로그인</b> — <code>gh auth login</code> 후 <code>gh auth status</code>로 확인</li>
+  <li><b>Node.js 18 이상</b> — <code>node -v</code> (Claude Code 설치에 필요)</li>
+  <li><b>Claude Code 설치 &amp; 로그인</b> — <code>claude</code>를 실행해 로그인 화면이 나오면 OK</li>
+  <li><b>(선택) VS Code</b> — 코드를 눈으로 확인할 편집기</li>
+  <li><b>(선택) Python 3.12</b> — 변환 스크립트를 내 컴퓨터에서도 돌려보고 싶다면</li>
+</ul>
+
+<h2>운영체제별 설치 명령</h2>
+<div class="tabs">
+  <section data-tab="Windows">
+    <p>PowerShell을 <b>관리자 권한</b>으로 열고 실행하세요.</p>
+    <pre data-lang="powershell">winget install --id Git.Git -e
+winget install --id GitHub.cli -e
+winget install --id OpenJS.NodeJS.LTS -e
+# 새 터미널을 연 뒤
+npm install -g @anthropic-ai/claude-code</pre>
+  </section>
+  <section data-tab="macOS">
+    <pre data-lang="bash">brew install git gh node
+npm install -g @anthropic-ai/claude-code</pre>
+  </section>
+  <section data-tab="Linux (Ubuntu)">
+    <pre data-lang="bash">sudo apt update && sudo apt install -y git gh nodejs npm
+npm install -g @anthropic-ai/claude-code</pre>
+  </section>
+</div>
+
+<h2>설치 확인</h2>
+<p>아래 명령이 모두 버전 번호를 출력하면 준비 완료입니다.</p>
+<pre data-lang="bash">git --version
+gh --version
+node -v
+claude --version</pre>
+
+<h2>Git 첫 설정 (한 번만)</h2>
+<p>커밋에는 "누가 만들었는지"가 기록됩니다. GitHub 가입 이메일과 같게 설정하는 것을 권장해요.</p>
+<pre data-lang="bash">git config --global user.name "홍길동"
+git config --global user.email "hong@example.com"
+git config --global init.defaultBranch main</pre>
+
+<div class="callout callout-vibe">
+  <span class="callout-title">✦ 바이브 코딩이란?</span>
+  코드를 한 줄씩 직접 쓰는 대신, AI에게 <b>"무엇을 만들고 싶은지"</b>를 자연어로 설명하고 결과를 확인·수정하며 개발하는 방식입니다.
+  이 과정에서는 <b>Claude Code</b>를 씁니다. 중요한 건 AI가 만든 결과를 <b>읽고, 실행해 보고, 검토하는 능력</b>이에요.
+  그래서 Git 개념을 먼저 확실히 잡고 갑니다.
+</div>
+
+<div class="callout callout-warn">
+  <span class="callout-title">⚠️ 회사 PC를 쓰는 경우</span>
+  사내 보안 정책으로 GitHub 접속이나 npm 설치가 막혀 있을 수 있습니다. 미리 담당자에게 확인하세요.
+  PART 1의 Git 실습실은 인터넷 없이도(첫 로딩 후) 동작합니다.
+</div>

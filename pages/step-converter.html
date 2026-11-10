@@ -1,0 +1,106 @@
+<h1>Step 2 · 엑셀 → JSON 변환기</h1>
+<p class="lede">웹 페이지는 엑셀 파일을 직접 읽기 어렵습니다. 그래서 엑셀을 웹이 좋아하는 형식인 <strong>JSON</strong>으로 바꿔 주는 파이썬 스크립트를 만듭니다.</p>
+
+<h2>잠깐 이론: 왜 JSON인가요?</h2>
+<p>JSON은 웹에서 데이터를 주고받는 사실상의 표준 형식이에요. 엑셀의 한 행은 JSON의 객체 하나가 됩니다.</p>
+<div class="cards">
+  <div class="card">
+    <h4>엑셀 (사람이 보기 좋음)</h4>
+    <table>
+      <thead><tr><th>월</th><th>지역</th><th>매출액</th></tr></thead>
+      <tbody><tr><td>2026-01</td><td>서울</td><td>12,000,000</td></tr><tr><td>2026-01</td><td>부산</td><td>8,400,000</td></tr></tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h4>JSON (프로그램이 읽기 좋음)</h4>
+    <pre data-nocopy>{ "rows": [
+  { "월": "2026-01-01", "지역": "서울", "매출액": 12000000 },
+  { "월": "2026-01-01", "지역": "부산", "매출액": 8400000 }
+] }</pre>
+  </div>
+</div>
+
+<h3>xlwings vs openpyxl</h3>
+<table>
+  <thead><tr><th></th><th>xlwings</th><th>openpyxl</th></tr></thead>
+  <tbody>
+    <tr><td>동작 방식</td><td>실제 Excel 앱을 띄워 조종</td><td>.xlsx 파일 내부(XML)를 직접 해석</td></tr>
+    <tr><td>필요 환경</td><td>Windows/macOS + <b>Excel 설치</b></td><td>파이썬만 있으면 어디서나 (Linux 포함)</td></tr>
+    <tr><td>수식 셀</td><td>Excel이 계산한 최신 결과</td><td>마지막 저장 시 캐시된 값만</td></tr>
+    <tr><td>속도</td><td>느림 (Excel 실행 수 초)</td><td>빠름</td></tr>
+  </tbody>
+</table>
+<p>
+  실습 목표상 <b>xlwings를 기본</b>으로 쓰되, Excel이 없는 환경에서도 실습이 멈추지 않도록 <b>실패하면 openpyxl로 자동 대체</b>하게 만듭니다.
+  (GitHub이 제공하는 Windows runner에는 Excel이 설치되어 있지 않을 수 있어요. 어떤 엔진으로 변환됐는지는 대시보드와 로그에 표시합니다.)
+</p>
+
+<h2>2-1. 변환기 만들기</h2>
+<p>먼저 작업용 브랜치를 만들고 Claude Code에 아래 프롬프트를 붙여넣으세요.</p>
+<pre data-lang="bash">git switch -c feature/converter</pre>
+<figure class="prompt-card">
+  <figcaption>프롬프트 2 · 엑셀 → JSON 변환기</figcaption>
+  <pre>scripts/excel_to_json.py 를 만들어줘.
+
+## 기능
+- 사용법: python scripts/excel_to_json.py input.xlsx --out build/data.json --engine auto --issue 12 --file-name sales.xlsx
+- --engine 은 auto | xlwings | openpyxl. auto 는 xlwings 를 먼저 시도하고 실패하면 openpyxl 로 대체
+- 대체될 때는 GitHub Actions 경고 형식(::warning::메시지)으로 출력
+- 모든 시트를 읽고, 첫 행은 머리글. 빈 행은 버리고, 빈 머리글은 "열1", "열2"... 로 채움
+- 날짜는 YYYY-MM-DD 문자열, 정수로 떨어지는 실수는 정수로 변환
+- 열 타입(number / date / text)을 추정하고 숫자 열은 합계를 계산
+
+## 출력 JSON 형식
+{
+  "schemaVersion": 1,
+  "generatedAt": "ISO 시각(UTC)",
+  "source": { "file": "sales.xlsx", "issue": 12, "engine": "xlwings", "warnings": [] },
+  "sheets": [
+    { "name": "매출",
+      "columns": [{ "name": "매출액", "type": "number" }],
+      "rows": [{ "매출액": 1000 }],
+      "summary": { "rowCount": 1, "totals": { "매출액": 1000 } } }
+  ]
+}
+
+## 설계
+- 엑셀 읽기는 XlwingsReader, OpenpyxlReader 두 클래스로 분리하고 같은 read(path) 메서드를 갖게 해줘
+- xlwings 는 App(visible=False) 로 열고 finally 에서 반드시 app.quit()
+- scripts/requirements.txt 에 버전 고정: xlwings, openpyxl
+- 실패하면 ::error:: 로 이유를 출력하고 종료 코드 1
+
+## 테스트
+- tests/test_excel_to_json.py 에 pytest 테스트를 만들어줘. Excel 없이 openpyxl 로 임시 엑셀을 만들어 검증하고,
+  xlwings 가 실패할 때 openpyxl 로 대체되는지도 monkeypatch 로 확인
+- 마지막으로 테스트를 실행해서 결과를 보여줘</pre>
+</figure>
+
+<h2>2-2. 직접 돌려 보기</h2>
+<p>샘플 엑셀을 내려받아 변환해 보세요. (Claude에게 "샘플 엑셀로 실행해 보고 결과 JSON 앞부분을 보여줘"라고 해도 됩니다.)</p>
+<p><a class="btn btn-sm" href="templates/excel-dashboard/sample-data/sales-2026-h1.xlsx" download>📥 sales-2026-h1.xlsx 내려받기</a></p>
+<pre data-lang="bash">pip install -r scripts/requirements.txt pytest
+python -m pytest -q
+python scripts/excel_to_json.py sales-2026-h1.xlsx --out build/data.json
+# Excel이 없는 PC라면: ::warning::xlwings 실패 ... → openpyxl 로 대체되는 것이 정상</pre>
+
+<div class="callout callout-warn">
+  <span class="callout-title">⚠️ build/ 폴더는 커밋하지 않아요</span>
+  변환 결과는 Actions가 매번 새로 만듭니다. <code>.gitignore</code>에 <code>build/</code>, <code>__pycache__/</code>를 추가하세요.
+  (실습실 미션 2에서 배운 그 .gitignore입니다!)
+</div>
+
+<h2>2-3. 커밋하고 main에 합치기</h2>
+<pre data-lang="bash">git add .
+git commit -m "엑셀 → JSON 변환기와 테스트 추가"
+git switch main
+git merge feature/converter
+git push</pre>
+
+<div class="quiz" data-answer="a">
+  <p class="quiz-q">회사 엑셀에 <code>=SUM(B2:B10)</code> 같은 수식이 많고, 누군가 값을 바꾼 뒤 Excel이 아닌 다른 프로그램으로 저장했습니다. 어느 엔진이 더 정확한 값을 읽을까요?</p>
+  <div class="quiz-options">
+    <button type="button" data-opt="a">xlwings — Excel이 직접 다시 계산한다</button>
+    <button type="button" data-opt="b">openpyxl — 파일을 직접 읽으니 항상 정확하다</button>
+  </div>
+  <p class="quiz-explain">정답! openpyxl은 수식을 계산하지 못하고 "마지막으로 저장된 계산값"만 읽어요. 이게 xlwings를 쓰는 이유이자, Windows + Excel 환경이 필요한 이유입니다.</p>
+</div>

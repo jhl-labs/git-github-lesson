@@ -1,0 +1,110 @@
+<h1>Step 1 · GitHub 저장소와 Claude Code</h1>
+<p class="lede">GitHub의 핵심 개념을 훑어보고, 실습용 저장소를 만든 뒤 Claude Code를 연결합니다.</p>
+
+<h2>GitHub 한눈에 보기</h2>
+<p>GitHub는 Git 저장소를 인터넷에 올려두는 곳이자, 그 위에서 협업하기 위한 도구 모음입니다. 오늘 쓸 기능은 다섯 가지예요.</p>
+<div class="cards">
+  <div class="card card-remote"><span class="card-icon">📁</span><h3>Repository</h3><p>프로젝트 하나 = 저장소 하나. 코드와 전체 커밋 기록이 들어 있어요.</p></div>
+  <div class="card card-work"><span class="card-icon">🐛</span><h3>Issues</h3><p>할 일·버그·요청을 적는 게시판. 오늘은 <b>엑셀 업로드 창구</b>로 씁니다.</p></div>
+  <div class="card card-stage"><span class="card-icon">🔀</span><h3>Pull Request</h3><p>"내 브랜치를 main에 합쳐 주세요" 요청. 여기서 코드 리뷰를 해요.</p></div>
+  <div class="card card-repo"><span class="card-icon">⚙️</span><h3>Actions</h3><p>이벤트가 생기면 자동으로 스크립트를 실행하는 로봇.</p></div>
+  <div class="card card-remote"><span class="card-icon">🌐</span><h3>Pages</h3><p>저장소 파일을 그대로 웹사이트로 공개.</p></div>
+</div>
+
+<figure class="shot" data-src="assets/img/screens/github-repo-tabs.png">
+  <figcaption>저장소 상단 탭 — Code · Issues · Pull requests · Actions · Settings(→ Pages)</figcaption>
+</figure>
+
+<h3>Public과 Private</h3>
+<p>
+  <b>Public</b> 저장소는 전 세계 누구나 코드를 볼 수 있고, <b>Private</b>은 초대한 사람만 볼 수 있어요.
+  무료 계정에서 GitHub Pages를 쓰려면 저장소가 <b>Public</b>이어야 합니다. 그래서 오늘 실습 저장소는 Public으로 만들고,
+  <b>민감한 실제 데이터는 절대 올리지 않습니다.</b>
+</p>
+
+<h2>1-1. 저장소 만들기</h2>
+<div class="tabs">
+  <section data-tab="터미널(gh CLI) — 추천">
+    <p>원하는 작업 폴더에서 실행하세요. 저장소 생성 + 내 컴퓨터로 clone까지 한 번에 됩니다.</p>
+    <pre data-lang="bash">gh repo create excel-dashboard --public --clone --add-readme --description "엑셀 → GitHub Actions → Pages 대시보드 실습"
+cd excel-dashboard
+git log --oneline   # Initial commit 하나가 보이면 성공</pre>
+  </section>
+  <section data-tab="웹 화면">
+    <ol class="steps">
+      <li><strong>github.com 우측 상단 <kbd>+</kbd> → New repository</strong></li>
+      <li><strong>이름 <code>excel-dashboard</code>, Public, "Add a README file" 체크 → Create</strong></li>
+      <li><strong>초록색 <kbd>Code</kbd> 버튼에서 HTTPS 주소 복사 후 clone</strong>
+        <pre data-lang="bash">git clone https://github.com/&lt;내아이디&gt;/excel-dashboard.git
+cd excel-dashboard</pre>
+      </li>
+    </ol>
+    <figure class="shot" data-src="assets/img/screens/github-new-repo.png">
+      <figcaption>New repository 화면 — 이름, Public, README 체크</figcaption>
+    </figure>
+  </section>
+</div>
+
+<div class="callout">
+  <span class="callout-title">🔗 Git 실습실과 연결해 보세요</span>
+  방금 한 일은 실습실 미션 5의 <code>git clone</code>과 같아요. 원격(GitHub)에 저장소가 먼저 생기고, 그걸 내 컴퓨터로 복사했습니다.
+  <code>git remote -v</code>를 쳐 보면 <code>origin</code>이 GitHub 주소로 이미 연결되어 있을 거예요.
+</div>
+
+<h2>1-2. Claude Code 시작하기</h2>
+<p>저장소 폴더 안에서 Claude Code를 실행합니다. Claude Code는 <b>현재 폴더의 파일을 읽고, 명령을 실행하고, 파일을 고칠 수 있는</b> AI 코딩 도구예요.</p>
+<pre data-lang="bash">claude</pre>
+<figure class="shot" data-src="assets/img/screens/claude-code-start.png">
+  <figcaption>Claude Code 첫 화면 — 아래 입력창에 프롬프트를 붙여넣습니다</figcaption>
+</figure>
+
+<div class="callout callout-vibe">
+  <span class="callout-title">✦ 바이브 코딩 3원칙</span>
+  <ol>
+    <li><b>목표와 제약을 구체적으로</b> — "대시보드 만들어줘"보다 "data/data.json을 읽어 KPI 카드·막대 차트·표를 보여주는 정적 페이지"가 훨씬 낫습니다.</li>
+    <li><b>작게 나눠서</b> — 한 번에 전부 시키지 말고 Step마다 하나씩. 각 Step이 끝나면 <b>커밋</b>해서 되돌아갈 지점을 만듭니다.</li>
+    <li><b>결과는 반드시 확인</b> — Claude가 보여주는 변경 내용(diff)을 읽고, 직접 실행해 보고, 이상하면 그대로 말해 주세요.</li>
+  </ol>
+</div>
+
+<h2>1-3. 첫 프롬프트: 프로젝트 설명서(CLAUDE.md) 만들기</h2>
+<p><code>CLAUDE.md</code>는 Claude Code가 매번 읽는 "프로젝트 설명서"입니다. 이걸 먼저 만들어 두면 이후 프롬프트가 훨씬 짧아져요.</p>
+<figure class="prompt-card">
+  <figcaption>프롬프트 1 · 프로젝트 설명서 만들기</figcaption>
+  <pre>이 저장소에서 아래 서비스를 만들 거야. 먼저 프로젝트 설명서 CLAUDE.md 를 만들어줘. 코드는 아직 만들지 마.
+
+## 서비스 개요
+- 사용자가 GitHub 이슈에 엑셀(.xlsx) 파일을 첨부해 등록하면
+- GitHub Actions의 windows-latest runner에서 xlwings로 엑셀을 읽어 JSON으로 변환하고
+- 결과를 docs 브랜치의 data/data.json 으로 커밋한다
+- GitHub Pages는 docs 브랜치를 서빙하며, 비밀번호를 입력해야 대시보드(KPI, 차트, 표)를 볼 수 있다
+
+## 폴더 구조
+- scripts/  : 파이썬 스크립트 (변환기, 첨부파일 다운로드, docs 브랜치 배포 스크립트)
+- dashboard/: Pages에 올라갈 정적 파일 (빌드 도구 없이 순수 HTML/CSS/JS)
+- tests/    : pytest 테스트
+- .github/  : 워크플로우와 이슈 템플릿
+
+## 규칙
+- 사용자에게 보이는 문구와 주석은 한국어
+- 파이썬 3.12, 외부 라이브러리는 xlwings, openpyxl 만 사용
+- 사용자 데이터를 화면에 출력할 때 innerHTML 금지 (textContent 사용)
+- 비밀번호·토큰을 코드에 하드코딩 금지
+- 작업이 끝나면 무엇을 바꿨는지 짧게 요약하고, 커밋은 내가 확인한 뒤 하자고 말해줘</pre>
+</figure>
+
+<p>Claude가 만든 <code>CLAUDE.md</code>를 열어 읽어 본 뒤, 마음에 들면 커밋하고 push 합니다. 실습실에서 했던 그대로예요.</p>
+<pre data-lang="bash">git status
+git add CLAUDE.md
+git commit -m "프로젝트 설명서 추가"
+git push</pre>
+
+<div class="callout callout-tip">
+  <span class="callout-title">💡 Claude Code에게 커밋을 맡겨도 돼요</span>
+  "변경 사항 커밋하고 push 해줘"라고 말하면 Claude가 <code>git add</code> → <code>git commit</code> → <code>git push</code>를 대신 실행합니다.
+  단, 처음에는 <b>직접 쳐 보면서</b> 실습실에서 배운 개념과 연결해 보세요.
+</div>
+
+<figure class="shot" data-src="assets/img/screens/github-first-push.png">
+  <figcaption>push 후 GitHub 저장소 화면 — CLAUDE.md와 커밋 메시지가 보입니다</figcaption>
+</figure>

@@ -1,0 +1,102 @@
+<h1>오늘 만들 서비스</h1>
+<p class="lede">
+  "엑셀로 관리하는 매출 데이터를 팀원들이 웹에서 보게 해 주세요." — 실무에서 정말 흔한 요청입니다.
+  서버 한 대 없이 <strong>GitHub만으로</strong> 이걸 만들어 봅니다.
+</p>
+
+<h2>전체 구조</h2>
+<figure class="diagram">
+  <svg viewBox="0 0 760 330" role="img" aria-label="사용자가 이슈에 엑셀을 올리면 Actions Windows runner가 xlwings로 변환해 docs 브랜치에 커밋하고 Pages가 대시보드를 서빙하는 구조도">
+    <defs>
+      <marker id="pa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="var(--ink-2)" /></marker>
+    </defs>
+    <rect x="10" y="10" width="740" height="240" rx="18" fill="none" stroke="var(--c-remote)" stroke-width="2" stroke-dasharray="6 5" />
+    <text x="30" y="36" font-weight="800" fill="var(--c-remote)" style="fill:var(--c-remote)">GitHub 저장소 (예: you/excel-dashboard)</text>
+
+    <rect x="30" y="60" width="150" height="80" rx="12" fill="var(--c-work-soft)" stroke="var(--c-work)" stroke-width="2" />
+    <text x="105" y="92" text-anchor="middle" font-weight="800">① Issue</text>
+    <text x="105" y="114" text-anchor="middle" class="d-sub">[EXCEL] 상반기 매출</text>
+    <text x="105" y="130" text-anchor="middle" class="d-sub">📎 sales.xlsx</text>
+
+    <rect x="230" y="50" width="260" height="180" rx="12" fill="var(--c-repo-soft)" stroke="var(--c-repo)" stroke-width="2" />
+    <text x="360" y="76" text-anchor="middle" font-weight="800">② GitHub Actions</text>
+    <text x="360" y="96" text-anchor="middle" class="d-sub">workflow: excel-to-dashboard.yml</text>
+    <rect x="250" y="108" width="220" height="108" rx="10" fill="var(--bg-elev)" stroke="var(--line-strong)" />
+    <text x="262" y="130" font-size="13" font-weight="700">🪟 Windows runner (가상 PC)</text>
+    <text x="262" y="152" font-size="12.5" class="d-mono">1. 첨부 엑셀 다운로드</text>
+    <text x="262" y="172" font-size="12.5" class="d-mono">2. xlwings로 읽기</text>
+    <text x="262" y="192" font-size="12.5" class="d-mono">3. data.json 생성</text>
+    <text x="262" y="208" font-size="12.5" class="d-mono">4. docs 브랜치에 push</text>
+
+    <rect x="540" y="60" width="190" height="70" rx="12" fill="var(--bg-elev)" stroke="var(--line-strong)" stroke-width="2" />
+    <text x="635" y="88" text-anchor="middle" font-weight="800">main 브랜치</text>
+    <text x="635" y="108" text-anchor="middle" class="d-sub">scripts/ · dashboard/ · .github/</text>
+    <rect x="540" y="150" width="190" height="80" rx="12" fill="var(--c-stage-soft)" stroke="var(--c-stage)" stroke-width="2" />
+    <text x="635" y="178" text-anchor="middle" font-weight="800">③ docs 브랜치</text>
+    <text x="635" y="198" text-anchor="middle" class="d-sub">index.html · app.js</text>
+    <text x="635" y="214" text-anchor="middle" class="d-sub">data/data.json</text>
+
+    <rect x="470" y="268" width="260" height="52" rx="12" fill="var(--c-work-soft)" stroke="var(--c-work)" stroke-width="2" />
+    <text x="600" y="292" text-anchor="middle" font-weight="800">④ GitHub Pages 대시보드</text>
+    <text x="600" y="310" text-anchor="middle" class="d-sub">you.github.io/excel-dashboard · 🔒 비밀번호</text>
+
+    <g stroke="var(--ink-2)" stroke-width="2.2" fill="none">
+      <path d="M180 100 H226" marker-end="url(#pa)" />
+      <path d="M540 95 H494" marker-end="url(#pa)" />
+      <path d="M490 190 H536" marker-end="url(#pa)" />
+      <path d="M635 230 V264" marker-end="url(#pa)" />
+    </g>
+    <text x="203" y="92" text-anchor="middle" class="d-sub">트리거</text>
+    <text x="515" y="88" text-anchor="middle" class="d-sub">코드</text>
+    <text x="515" y="182" text-anchor="middle" class="d-sub">커밋</text>
+    <text x="680" y="252" class="d-sub">서빙</text>
+    <text x="40" y="300" font-size="22">👩‍💼</text>
+    <text x="72" y="296" font-size="13" font-weight="700">팀원: 브라우저로 접속해</text>
+    <text x="72" y="314" font-size="13" font-weight="700">비밀번호 입력 후 확인</text>
+    <path d="M250 300 H466" stroke="var(--ink-2)" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#pa)" fill="none" />
+  </svg>
+  <figcaption>서버 없이 GitHub의 기능 4가지(Repository · Issues · Actions · Pages)만 조합합니다.</figcaption>
+</figure>
+
+<h2>왜 이런 구조일까?</h2>
+<table>
+  <thead><tr><th>요구 사항</th><th>사용하는 GitHub 기능</th><th>배우는 개념</th></tr></thead>
+  <tbody>
+    <tr><td>엑셀 파일을 쉽게 올리고 싶다</td><td><b>Issues</b> (파일 첨부 + 이슈 템플릿)</td><td>이벤트(이슈 생성)가 자동화를 깨운다</td></tr>
+    <tr><td>엑셀을 사람 손 없이 변환하고 싶다</td><td><b>Actions</b> + Windows runner + xlwings</td><td>워크플로우, 트리거, runner, 권한</td></tr>
+    <tr><td>변환 결과를 버전 관리하고 싶다</td><td><b>Git</b> (docs 브랜치에 커밋)</td><td>브랜치의 다른 용도: 배포용 브랜치</td></tr>
+    <tr><td>웹에서 보고 싶다</td><td><b>Pages</b> (docs 브랜치를 웹으로 서빙)</td><td>정적 호스팅</td></tr>
+    <tr><td>아무나 보면 안 된다</td><td>비밀번호 화면 (JavaScript)</td><td>…그런데 이게 진짜 보안일까? → <a href="#/limits">마지막 장</a></td></tr>
+  </tbody>
+</table>
+
+<div class="callout callout-warn">
+  <span class="callout-title">🤔 왜 Windows + xlwings?</span>
+  xlwings는 <b>실제 Microsoft Excel 프로그램을 원격 조종</b>해서 파일을 읽습니다. 수식·매크로가 많은 회사 엑셀을 "엑셀이 보여주는 그대로" 읽을 수 있다는 장점이 있지만,
+  Excel이 설치된 Windows(또는 macOS)가 필요합니다. 이번 실습은 일부러 이 구조를 택해 Actions의 OS 선택을 경험해 보고,
+  <a href="#/limits">마지막 장</a>에서 "실무라면 Linux에서 병렬로 처리하는 게 왜 더 나은지" 비교합니다.
+</div>
+
+<h2>최종 저장소 구조</h2>
+<pre data-nocopy>excel-dashboard/
+├── .github/
+│   ├── ISSUE_TEMPLATE/excel-upload.yml   ← "엑셀 업로드" 이슈 양식
+│   ├── workflows/
+│   │   ├── excel-to-dashboard.yml        ← 이슈 → 변환 → docs 브랜치 (Windows)
+│   │   ├── deploy-dashboard.yml          ← 화면 코드 변경 시 재배포 (Linux)
+│   │   └── ai-review.yml                 ← PR 자동 코드 리뷰 (Linux)
+│   └── review-prompt.md
+├── scripts/
+│   ├── excel_to_json.py                  ← 엑셀 → JSON 변환기
+│   ├── fetch_attachment.py               ← 이슈 첨부 파일 다운로드
+│   ├── publish_docs.sh                   ← docs 브랜치에 반영
+│   └── requirements.txt
+├── dashboard/                            ← Pages로 서빙될 화면 (index.html, app.js, style.css, config.js)
+├── tests/test_excel_to_json.py
+└── CLAUDE.md                             ← Claude Code에게 주는 프로젝트 설명서</pre>
+
+<div class="callout callout-tip">
+  <span class="callout-title">📦 정답 예시가 준비되어 있어요</span>
+  이 사이트 저장소의 <code>templates/excel-dashboard/</code>에 강사가 검증한 완성 코드가 있습니다.
+  Claude Code의 결과물이 이상할 때 비교해 보세요. 단, <b>먼저 직접 프롬프트로 만들어 보는 것</b>이 이 과정의 핵심입니다.
+</div>

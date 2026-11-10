@@ -1,0 +1,102 @@
+<section class="hero">
+  <svg class="hero-graph" viewBox="0 0 300 260" aria-hidden="true">
+    <g fill="none" stroke-width="3" stroke-linecap="round">
+      <path d="M60 30 V230" stroke="var(--c-repo)" />
+      <path d="M60 80 C60 110 140 100 140 130 V180 C140 205 60 200 60 225" stroke="var(--c-stage)" />
+      <path d="M140 140 C140 160 220 150 220 175 V190" stroke="var(--c-work)" stroke-dasharray="2 7" />
+    </g>
+    <g stroke-width="3">
+      <circle cx="60" cy="30" r="9" fill="var(--bg-elev)" stroke="var(--c-repo)" />
+      <circle cx="60" cy="80" r="9" fill="var(--bg-elev)" stroke="var(--c-repo)" />
+      <circle cx="140" cy="130" r="9" fill="var(--bg-elev)" stroke="var(--c-stage)" />
+      <circle cx="140" cy="175" r="9" fill="var(--bg-elev)" stroke="var(--c-stage)" />
+      <circle cx="60" cy="150" r="9" fill="var(--bg-elev)" stroke="var(--c-repo)" />
+      <circle cx="60" cy="228" r="11" fill="var(--c-repo)" stroke="var(--c-repo)" />
+      <circle cx="220" cy="195" r="9" fill="var(--bg-elev)" stroke="var(--c-work)" />
+    </g>
+  </svg>
+  <p class="eyebrow">초보 개발자를 위한 하루 과정</p>
+  <h1>Git이 처음이어도, 오늘 퇴근 전에 GitHub로 서비스를 배포합니다</h1>
+  <p class="lede">
+    브라우저 안에서 <strong>진짜 Git</strong>을 직접 쳐 보며 개념을 잡고, Claude Code와 함께
+    <strong>엑셀 → GitHub Actions → GitHub Pages 대시보드</strong>를 만들어 봅니다. 설치 없이 바로 시작하세요.
+  </p>
+  <div class="hero-actions">
+    <a class="btn btn-primary" href="#/git-lab">🧪 Git 실습실 바로 가기</a>
+    <a class="btn" href="#/setup">처음부터 차근차근 →</a>
+  </div>
+</section>
+
+<h2>이 과정에서 배우는 4가지</h2>
+<div class="route">
+  <div class="route-item" style="border-top: 4px solid var(--c-repo)">
+    <b>01</b><strong>Git</strong><span>내 컴퓨터에서 코드의 변경 이력을 기록하는 도구. 터미널에서 직접 실습합니다.</span>
+  </div>
+  <div class="route-item" style="border-top: 4px solid var(--c-remote)">
+    <b>02</b><strong>GitHub</strong><span>Git 저장소를 인터넷에 올려 공유·협업하는 서비스. 이슈와 PR을 씁니다.</span>
+  </div>
+  <div class="route-item" style="border-top: 4px solid var(--c-stage)">
+    <b>03</b><strong>GitHub Actions</strong><span>"이 일이 생기면 저 일을 해라" — GitHub 안의 자동화 로봇입니다.</span>
+  </div>
+  <div class="route-item" style="border-top: 4px solid var(--c-work)">
+    <b>04</b><strong>GitHub Pages</strong><span>저장소의 파일을 그대로 웹사이트로 공개해 주는 무료 호스팅입니다.</span>
+  </div>
+</div>
+
+<h2>오늘 완성할 실습 서비스</h2>
+<p>엑셀 파일을 GitHub 이슈에 올리기만 하면, 몇 분 뒤 웹 대시보드가 저절로 갱신되는 서비스입니다.</p>
+<div class="pipeline">
+  <div class="pipe-step"><span class="pipe-tag tag-user">나</span><b>엑셀 업로드</b><small>GitHub 이슈에 .xlsx 첨부</small></div>
+  <div class="pipe-step"><span class="pipe-tag tag-actions">Actions</span><b>Windows runner</b><small>이슈 등록을 감지해 자동 실행</small></div>
+  <div class="pipe-step"><span class="pipe-tag tag-actions">Actions</span><b>xlwings 변환</b><small>엑셀 → data.json</small></div>
+  <div class="pipe-step"><span class="pipe-tag tag-github">Git</span><b>docs 브랜치 커밋</b><small>봇이 대신 commit &amp; push</small></div>
+  <div class="pipe-step"><span class="pipe-tag tag-pages">Pages</span><b>대시보드</b><small>비밀번호 로그인 후 차트·표</small></div>
+</div>
+<p>
+  완성본이 궁금하다면 <a href="demo/" target="_blank" rel="noopener">완성 예시 대시보드</a>를 열어 보세요.
+  (비밀번호: <code>gitpages2026</code>)
+</p>
+
+<h2>진행 방식</h2>
+<div class="cards">
+  <div class="card">
+    <span class="card-icon">📖</span>
+    <h3>짧은 이론</h3>
+    <p>각 단계 전에 꼭 필요한 개념만 그림과 스크린샷으로 설명합니다.</p>
+  </div>
+  <div class="card">
+    <span class="card-icon">🧪</span>
+    <h3>직접 실습</h3>
+    <p>Git은 브라우저 속 진짜 Git 엔진(WebAssembly)으로, 결과가 실시간으로 그려집니다.</p>
+  </div>
+  <div class="card">
+    <span class="card-icon">✦</span>
+    <h3>바이브 코딩</h3>
+    <p>코드는 Claude Code가 씁니다. 여러분은 <b>프롬프트 복사 → 붙여넣기 → 결과 확인</b>만 하면 돼요.</p>
+  </div>
+  <div class="card">
+    <span class="card-icon">🔍</span>
+    <h3>리뷰와 한계</h3>
+    <p>AI 코드 리뷰로 PR을 검토하고, 마지막엔 이 구조의 한계를 정직하게 짚습니다.</p>
+  </div>
+</div>
+
+<h2>권장 일정</h2>
+<table>
+  <thead>
+    <tr><th>시간</th><th>내용</th><th>결과물</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>0:00 – 0:15</td><td>준비물 체크</td><td>GitHub 계정, Claude Code 실행 확인</td></tr>
+    <tr><td>0:15 – 1:30</td><td>PART 1 · Git 핵심 개념 + 실습실 미션 1~6</td><td>커밋·브랜치·병합·push/pull 경험</td></tr>
+    <tr><td>1:30 – 3:30</td><td>PART 2 · Step 1~5 실전 프로젝트</td><td>동작하는 엑셀 대시보드</td></tr>
+    <tr><td>3:30 – 4:00</td><td>Step 6 · PR과 AI 코드 리뷰</td><td>리뷰 댓글이 달린 PR</td></tr>
+    <tr><td>4:00 – 4:20</td><td>한계와 다음 단계</td><td>"왜 백엔드가 필요한가"에 대한 내 답</td></tr>
+  </tbody>
+</table>
+
+<div class="callout callout-tip">
+  <span class="callout-title">💡 이 사이트 사용법</span>
+  왼쪽 목차의 동그라미는 진행 상황이에요. 각 장 맨 아래의 <b>"이 장을 마쳤어요"</b>를 누르면 체크되고 다음 장으로 넘어갑니다.
+  진행 상황은 이 브라우저에만 저장됩니다.
+</div>

@@ -1,0 +1,35 @@
+<h1>인터랙티브 Git 실습실</h1>
+<p class="lede">
+  왼쪽 미션을 따라 터미널에 명령을 입력하세요. 명령 칩을 클릭하면 입력창에 채워집니다.
+  오른쪽(또는 아래) 시각화는 <span class="c-work">작업 디렉터리</span> · <span class="c-stage">스테이징</span> ·
+  <span class="c-repo">로컬 저장소</span> · <span class="c-remote">GitHub</span>를 실시간으로 보여줍니다.
+</p>
+
+<div data-git-lab></div>
+
+<h2>실습실 사용 팁</h2>
+<table>
+  <thead><tr><th>하고 싶은 것</th><th>방법</th></tr></thead>
+  <tbody>
+    <tr><td>파일 만들기 / 덮어쓰기</td><td><code>echo "내용" &gt; 파일명</code></td></tr>
+    <tr><td>파일 끝에 한 줄 추가</td><td><code>echo "내용" &gt;&gt; 파일명</code></td></tr>
+    <tr><td>파일 편집하기</td><td><code>edit 파일명</code> 또는 시각화의 파일 이름 클릭 → 편집기 창</td></tr>
+    <tr><td>이전 명령 다시 쓰기</td><td><kbd>↑</kbd> <kbd>↓</kbd></td></tr>
+    <tr><td>파일 이름 자동완성</td><td><kbd>Tab</kbd></td></tr>
+    <tr><td>사용 가능한 명령 보기</td><td><code>help</code>, <code>git help</code></td></tr>
+    <tr><td>처음부터 다시</td><td>터미널 위의 <b>초기화</b> 버튼 (또는 새로고침)</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <span class="callout-title">🔬 이 터미널은 어떻게 동작하나요?</span>
+  C로 작성된 Git 라이브러리 <b>libgit2</b>를 WebAssembly로 컴파일한 <a href="https://github.com/petersalomonsen/wasm-git" target="_blank" rel="noopener">wasm-git</a>이 브라우저 메모리 속 가상 파일시스템에서 실제 커밋 객체를 만듭니다.
+  "가상 GitHub"도 같은 메모리 안의 bare 저장소예요. 몇몇 명령(<code>branch</code>, <code>switch</code>, <code>restore</code>, <code>pull</code> 등)은 실제 git과 같은 결과가 나오도록 실습실이 보완합니다.
+  그래서 <b>여기서 익힌 명령은 실제 터미널에서도 그대로</b> 쓸 수 있습니다.
+</div>
+
+<div class="callout callout-warn">
+  <span class="callout-title">실제 Git과 다른 점</span>
+  편집기(vim)가 없어 커밋 메시지는 반드시 <code>-m "메시지"</code>로 적어요. <code>rebase</code>, <code>stash</code>, <code>--amend</code> 같은 고급 명령은 지원하지 않습니다.
+  새로고침하면 모든 실습 내용이 사라집니다.
+</div>

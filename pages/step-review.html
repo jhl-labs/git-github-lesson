@@ -1,0 +1,135 @@
+<h1>Step 6 · PR과 AI 코드 리뷰</h1>
+<p class="lede">
+  지금까지는 혼자 main에 바로 merge 했죠. 실무에서는 <strong>Pull Request(PR)</strong>로 "이 변경을 합쳐도 될까요?"라고 묻고, 동료(또는 AI)가 리뷰한 뒤 합칩니다.
+</p>
+
+<h2>잠깐 이론: Pull Request</h2>
+<figure class="diagram">
+  <svg viewBox="0 0 680 170" role="img" aria-label="feature 브랜치를 push하고 PR을 열어 리뷰 후 main에 병합하는 흐름">
+    <defs>
+      <marker id="ra" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="var(--ink-2)" /></marker>
+    </defs>
+    <g font-size="14" font-weight="800">
+      <rect x="10" y="50" width="130" height="64" rx="12" fill="var(--c-stage-soft)" stroke="var(--c-stage)" stroke-width="2" /><text x="75" y="78" text-anchor="middle">① 브랜치 작업</text><text x="75" y="98" text-anchor="middle" class="d-sub" font-weight="400">commit &amp; push</text>
+      <rect x="180" y="50" width="130" height="64" rx="12" fill="var(--c-remote-soft)" stroke="var(--c-remote)" stroke-width="2" /><text x="245" y="78" text-anchor="middle">② PR 열기</text><text x="245" y="98" text-anchor="middle" class="d-sub" font-weight="400">gh pr create</text>
+      <rect x="350" y="50" width="150" height="64" rx="12" fill="var(--c-repo-soft)" stroke="var(--c-repo)" stroke-width="2" /><text x="425" y="78" text-anchor="middle">③ 리뷰 &amp; 수정</text><text x="425" y="98" text-anchor="middle" class="d-sub" font-weight="400">사람 + AI 에이전트</text>
+      <rect x="540" y="50" width="130" height="64" rx="12" fill="var(--c-work-soft)" stroke="var(--c-work)" stroke-width="2" /><text x="605" y="78" text-anchor="middle">④ Merge</text><text x="605" y="98" text-anchor="middle" class="d-sub" font-weight="400">main에 합치기</text>
+    </g>
+    <g stroke="var(--ink-2)" stroke-width="2.2"><path d="M140 82 H176" marker-end="url(#ra)" /><path d="M310 82 H346" marker-end="url(#ra)" /><path d="M500 82 H536" marker-end="url(#ra)" /></g>
+    <path d="M425 114 C425 160 245 160 245 118" fill="none" stroke="var(--muted)" stroke-dasharray="5 4" stroke-width="2" marker-end="url(#ra)" />
+    <text x="335" y="160" text-anchor="middle" class="d-sub">지적 사항을 고쳐 다시 push 하면 PR에 자동 반영</text>
+  </svg>
+</figure>
+<ul>
+  <li>PR은 GitHub의 기능이에요(Git 명령이 아닙니다). 두 브랜치의 <b>차이(diff)</b>를 보여주고, 줄 단위로 댓글을 달 수 있어요.</li>
+  <li>PR이 열리면 Actions가 테스트·리뷰를 자동 실행할 수 있습니다 (<code>on: pull_request</code>).</li>
+  <li>리뷰어가 "Approve" 하면 <b>Merge</b> 버튼으로 합칩니다. Settings에서 "리뷰 승인 없이는 merge 금지" 규칙(Branch protection)도 걸 수 있어요.</li>
+</ul>
+
+<h2>6-1. 기능 브랜치에서 작업하고 PR 열기</h2>
+<p>대시보드에 작은 기능을 추가해 봅시다.</p>
+<pre data-lang="bash">git switch main && git pull
+git switch -c feature/csv-download</pre>
+<figure class="prompt-card">
+  <figcaption>프롬프트 6 · 기능 추가 후 PR 만들기</figcaption>
+  <pre>대시보드의 "원본 데이터" 표 옆에 "CSV 다운로드" 버튼을 추가해줘.
+- 현재 검색 필터가 적용된 행만 내려받기
+- 엑셀에서 한글이 깨지지 않게 UTF-8 BOM 추가, 쉼표·따옴표·줄바꿈이 들어간 값은 CSV 규칙대로 이스케이프
+- 파일 이름: 시트이름_YYYYMMDD.csv
+
+완료되면:
+1. 변경 사항을 "대시보드 CSV 다운로드 추가" 메시지로 커밋하고 push 해줘
+2. gh pr create 로 PR을 만들어줘. 본문에는 변경 요약, 테스트 방법, 스크린샷 자리를 넣어줘
+3. PR 주소를 알려줘</pre>
+</figure>
+<figure class="shot" data-src="assets/img/screens/pr-opened.png">
+  <figcaption>열린 Pull Request — Conversation · Commits · Files changed 탭</figcaption>
+</figure>
+
+<h2>6-2. AI 에이전트로 코드 리뷰하기 (CLI)</h2>
+<p>
+  Claude Code의 <code>-p</code>(print) 옵션은 대화 창 없이 <b>한 번 질문하고 답만 출력</b>하는 headless 모드예요.
+  파이프(<code>|</code>)로 PR의 diff를 넘겨주면 리뷰어처럼 동작합니다. 같은 방식으로 다른 에이전트 CLI(opencode)도 쓸 수 있어요.
+</p>
+<div class="tabs">
+  <section data-tab="claude -p">
+    <pre data-lang="bash"># PR 번호가 1번이라면
+gh pr diff 1 | claude -p "이 PR diff를 시니어 개발자처럼 한국어로 리뷰해줘.
+보안(XSS, 비밀 정보 노출, 워크플로우 인젝션), 버그, 가독성 순서로
+'🔴 꼭 고칠 것 / 🟡 고치면 좋은 것 / 🟢 잘한 점' 형식으로, 파일:줄 위치와 수정 예시를 포함해줘." > review.md
+
+cat review.md
+gh pr comment 1 --body-file review.md   # 리뷰 결과를 PR 댓글로 남기기</pre>
+  </section>
+  <section data-tab="opencode">
+    <p><a href="https://opencode.ai" target="_blank" rel="noopener">opencode</a>는 터미널용 오픈소스 AI 코딩 에이전트입니다. <code>run</code> 하위 명령으로 비대화형 실행을 해요.</p>
+    <pre data-lang="bash">opencode run "gh pr diff 1 명령으로 PR 1번의 변경 사항을 확인하고 한국어로 코드 리뷰해줘.
+보안, 버그, 가독성 관점에서 꼭 고칠 것 / 고치면 좋은 것 / 잘한 점으로 나눠서 정리해줘." > review.md
+
+gh pr comment 1 --body-file review.md</pre>
+  </section>
+  <section data-tab="Claude Code 대화창">
+    <p>이미 Claude Code를 열어 두었다면 그냥 부탁해도 됩니다.</p>
+    <pre data-nocopy>PR 1번을 gh pr diff 로 읽고 코드 리뷰해줘. 지적 사항은 gh pr review 1 --comment 로 PR에 남겨줘.</pre>
+  </section>
+</div>
+
+<div class="callout callout-vibe">
+  <span class="callout-title">✦ 왜 "다른 AI"에게 리뷰를 맡길까?</span>
+  코드를 짠 AI 세션은 자기 결과를 좋게 보는 경향이 있어요. 새 세션(<code>claude -p</code>)이나 다른 도구(opencode)로 <b>맥락 없이 diff만 보게 하면</b> 사람 리뷰어처럼 더 객관적인 지적이 나옵니다.
+  그래도 <b>최종 판단은 사람</b>이 합니다. AI의 지적이 틀릴 수도 있어요.
+</div>
+
+<h2>6-3. PR이 열릴 때마다 자동 리뷰 (Actions)</h2>
+<p>CLI 리뷰를 워크플로우로 옮기면 PR마다 자동으로 리뷰 댓글이 달립니다.</p>
+<ol class="steps">
+  <li><strong>API 키를 Secret으로 등록</strong> — <a href="https://console.anthropic.com" target="_blank" rel="noopener">Anthropic Console</a>에서 키를 발급받아 저장소에 등록 (키는 화면·코드에 노출하지 마세요)
+    <pre data-lang="bash">gh secret set ANTHROPIC_API_KEY   # 실행 후 키를 붙여넣기 (입력은 화면에 보이지 않음)</pre>
+  </li>
+  <li><strong>워크플로우 만들기</strong>
+    <figure class="prompt-card">
+      <figcaption>프롬프트 7 · PR 자동 리뷰 워크플로우</figcaption>
+      <pre>.github/workflows/ai-review.yml 을 만들어줘.
+- on: pull_request (opened, synchronize, reopened)
+- runs-on: ubuntu-latest, permissions: contents read, pull-requests write
+- 외부 fork 에서 온 PR 은 건너뛰기 (Secret 이 전달되지 않음)
+- Node 22 설치 → npm install -g @anthropic-ai/claude-code
+- gh pr diff 로 diff 를 파일로 저장하고, .github/review-prompt.md 를 프롬프트로 claude -p 에 diff 를 표준 입력으로 넘겨 리뷰 생성
+- ANTHROPIC_API_KEY Secret 이 비어 있으면 경고만 남기고 성공 종료
+- 결과를 "🤖 AI 코드 리뷰" 제목과 "최종 판단은 사람이" 안내를 붙여 gh pr comment 로 등록
+- .github/review-prompt.md 에는 보안(스크립트 인젝션, XSS, 하드코딩된 비밀), 버그, 가독성 기준과 출력 형식을 한국어로 정리</pre>
+    </figure>
+  </li>
+  <li><strong>PR에 push 해서 확인</strong> — 워크플로우 파일을 PR 브랜치에 커밋·push 하면 바로 그 PR에서 리뷰가 실행됩니다.
+    <figure class="shot" data-src="assets/img/screens/pr-ai-review-comment.png">
+      <figcaption>Actions가 PR에 남긴 AI 리뷰 댓글</figcaption>
+    </figure>
+  </li>
+</ol>
+<div class="callout">
+  <span class="callout-title">참고</span>
+  Anthropic이 제공하는 공식 Action(<code>anthropics/claude-code-action</code>)을 쓰면 PR 댓글에서 <code>@claude</code>를 불러 대화형으로 수정을 요청할 수도 있어요. 오늘은 원리를 보기 위해 CLI를 직접 호출했습니다.
+</div>
+
+<h2>6-4. 리뷰 연습: 위험한 코드 찾기</h2>
+<p>AI 리뷰가 정말 잡아내는지 시험해 봅시다. 새 브랜치에서 아래 두 변경을 <b>일부러</b> 넣고 PR을 열어 보세요. (리뷰 확인 후 PR은 merge하지 말고 닫습니다.)</p>
+<pre data-lang="javascript">// dashboard/app.js — 시트 이름을 제목에 표시 (❌ XSS: 엑셀 시트 이름에 &lt;img src=x onerror=alert(1)&gt; 를 넣으면?)
+document.getElementById('dash-title').innerHTML = config.title + ' - ' + state.sheet.name;</pre>
+<pre data-lang="yaml"># .github/workflows/excel-to-dashboard.yml 의 steps 에 추가 (❌ 스크립트 인젝션)
+      - name: 이슈 제목 기록
+        shell: bash
+        run: echo "처리 중: ${{ github.event.issue.title }}"</pre>
+<ul class="checklist" data-checklist="review-practice">
+  <li>AI 리뷰가 innerHTML 사용을 XSS 위험으로 지적했다</li>
+  <li>AI 리뷰가 이슈 제목의 직접 삽입을 인젝션 위험으로 지적했다</li>
+  <li>지적에 따라 고친 코드(textContent, env 전달)를 이해했다</li>
+  <li>연습용 PR을 merge 하지 않고 닫았다 (<code>gh pr close 번호</code>)</li>
+</ul>
+
+<h2>6-5. 리뷰 반영 후 Merge</h2>
+<pre data-lang="bash"># 지적 사항을 고친 뒤 같은 브랜치에 push → PR에 자동 반영
+git add . && git commit -m "리뷰 반영: CSV 이스케이프 보강" && git push
+
+gh pr merge 1 --squash --delete-branch   # 여러 커밋을 하나로 합쳐 main에 병합
+git switch main && git pull</pre>
+<p>main에 합쳐지면 <code>deploy-dashboard</code> 워크플로우가 실행되어 Pages에도 CSV 버튼이 생깁니다. <b>코드 리뷰 → 병합 → 자동 배포</b>, 실무 개발 흐름 한 바퀴를 완주했어요! 🎉</p>

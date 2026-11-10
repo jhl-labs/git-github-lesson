@@ -1,0 +1,143 @@
+<h1>한계와 다음 단계</h1>
+<p class="lede">
+  오늘 만든 서비스는 동작합니다. 하지만 <strong>"동작한다"와 "안전하다·운영할 만하다"는 다릅니다.</strong>
+  이 장에서는 우리 구조의 약점을 직접 공격해 보고, 실무라면 어떻게 바꿔야 하는지 정리합니다.
+</p>
+
+<h2>한계 1 · 그 비밀번호는 보안이 아닙니다</h2>
+<p>우리 로그인은 <b>브라우저 안의 JavaScript</b>가 "해시가 같으면 화면을 보여준다"는 판단을 할 뿐이에요. 브라우저는 사용자의 것이고, 사용자는 그 판단을 언제든 바꿀 수 있습니다. 직접 해 봅시다.</p>
+
+<h3>공격 ① 로그인 화면 우회 &amp; 데이터 직접 열기</h3>
+<div data-widget="login-bypass"></div>
+
+<h3>공격 ② 해시를 보고 비밀번호 알아내기</h3>
+<p>
+  <code>config.js</code>는 공개 파일이라 해시가 누구에게나 보입니다. SHA-256은 거꾸로 풀 수는 없지만, <b>후보를 하나씩 해시해서 비교</b>하면 됩니다(무차별 대입).
+  아래는 지금 이 브라우저 한 탭이 실제로 해 보는 겁니다.
+</p>
+<div data-widget="bruteforce"></div>
+
+<h3>정리: 무엇이 문제인가</h3>
+<table>
+  <thead><tr><th>약점</th><th>설명</th></tr></thead>
+  <tbody>
+    <tr><td>데이터가 공개 파일</td><td><code>data/data.json</code>은 주소만 알면 비밀번호 없이 받을 수 있어요. 공개 저장소라면 GitHub에서 docs 브랜치를 열어 봐도 됩니다.</td></tr>
+    <tr><td>판단을 클라이언트가 함</td><td><code>sessionStorage</code> 값 하나만 바꾸면 로그인 상태가 됩니다. 서버가 검증하지 않으면 인증이 아니에요.</td></tr>
+    <tr><td>해시가 공개됨</td><td>소금(salt)도, 느린 해시(bcrypt·Argon2)도 없는 SHA-256은 초당 수십억 번(GPU) 시도할 수 있어요.</td></tr>
+    <tr><td>원본 엑셀도 공개</td><td>공개 저장소의 이슈 첨부 파일은 누구나 내려받을 수 있습니다. 엑셀 원본이 그대로 노출돼요.</td></tr>
+    <tr><td>Git은 잊지 않는다</td><td>잘못 올린 데이터를 지워도 <b>커밋 이력</b>에 남습니다. 완전히 지우려면 이력 재작성이 필요하고, 이미 누군가 clone 했다면 회수 불가.</td></tr>
+    <tr><td>사용자 구분 없음</td><td>비밀번호 하나를 모두가 공유 → 누가 봤는지 모르고, 한 명이 퇴사해도 비밀번호를 바꾸는 것 외엔 방법이 없어요.</td></tr>
+  </tbody>
+</table>
+
+<div class="callout callout-warn">
+  <span class="callout-title">"그럼 데이터를 암호화해서 올리면요?"</span>
+  좋은 발상이에요. 워크플로우에서 비밀번호로 <code>data.json</code>을 AES로 암호화하고 브라우저에서 복호화하면(StatiCrypt 같은 방식) 공격 ①은 막힙니다.
+  하지만 여전히 <b>암호문은 공개</b>되어 있어 오프라인 무차별 대입(공격 ②)이 가능하고, 비밀번호 공유·폐기·권한 구분 문제는 그대로입니다.
+  <b>"정적 사이트에 비밀을 올려도 되는가?"의 답은 결국 "아니오"</b>입니다.
+</div>
+
+<h2>한계 2 · 그래서 진짜 백엔드 서버가 필요합니다</h2>
+<p>백엔드 서버는 <b>사용자가 손댈 수 없는 곳에서 판단하고, 허락된 데이터만 내보내는</b> 문지기입니다.</p>
+<figure class="diagram">
+  <svg viewBox="0 0 720 270" role="img" aria-label="정적 사이트와 백엔드 서버 구조 비교">
+    <defs>
+      <marker id="la" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="var(--ink-2)" /></marker>
+    </defs>
+    <text x="175" y="24" text-anchor="middle" font-weight="800">지금: 정적 사이트</text>
+    <rect x="20" y="40" width="130" height="60" rx="12" fill="var(--bg-elev)" stroke="var(--line-strong)" stroke-width="2" /><text x="85" y="66" text-anchor="middle" font-weight="700">브라우저</text><text x="85" y="86" text-anchor="middle" class="d-sub">로그인 판단도 여기서</text>
+    <rect x="200" y="40" width="130" height="60" rx="12" fill="var(--c-work-soft)" stroke="var(--c-work)" stroke-width="2" /><text x="265" y="66" text-anchor="middle" font-weight="700">GitHub Pages</text><text x="265" y="86" text-anchor="middle" class="d-sub">파일을 누구에게나</text>
+    <path d="M150 70 H196" stroke="var(--ink-2)" stroke-width="2" marker-end="url(#la)" />
+    <text x="175" y="130" text-anchor="middle" class="d-sub">data.json 요청 → 무조건 200 OK 😱</text>
+
+    <line x1="360" y1="20" x2="360" y2="250" stroke="var(--line)" stroke-dasharray="4 4" />
+
+    <text x="545" y="24" text-anchor="middle" font-weight="800">실무: 백엔드 서버</text>
+    <rect x="380" y="40" width="100" height="60" rx="12" fill="var(--bg-elev)" stroke="var(--line-strong)" stroke-width="2" /><text x="430" y="75" text-anchor="middle" font-weight="700">브라우저</text>
+    <rect x="520" y="40" width="180" height="96" rx="12" fill="var(--c-repo-soft)" stroke="var(--c-repo)" stroke-width="2" />
+    <text x="610" y="64" text-anchor="middle" font-weight="800">API 서버</text>
+    <text x="610" y="84" text-anchor="middle" font-size="12">① 로그인 검증 (SSO/OIDC)</text>
+    <text x="610" y="102" text-anchor="middle" font-size="12">② 권한 확인 (이 사람 이 데이터?)</text>
+    <text x="610" y="120" text-anchor="middle" font-size="12">③ 허락된 데이터만 응답</text>
+    <rect x="545" y="175" width="130" height="56" rx="12" fill="var(--c-stage-soft)" stroke="var(--c-stage)" stroke-width="2" /><text x="610" y="200" text-anchor="middle" font-weight="700">데이터베이스</text><text x="610" y="218" text-anchor="middle" class="d-sub">외부에서 접근 불가</text>
+    <path d="M480 70 H516" stroke="var(--ink-2)" stroke-width="2" marker-end="url(#la)" />
+    <path d="M610 136 V171" stroke="var(--ink-2)" stroke-width="2" marker-end="url(#la)" />
+    <text x="430" y="130" text-anchor="middle" class="d-sub">토큰 없으면 401</text>
+    <text x="430" y="148" text-anchor="middle" class="d-sub">권한 없으면 403</text>
+  </svg>
+</figure>
+<table>
+  <thead><tr><th>필요한 것</th><th>정적 사이트(오늘)</th><th>백엔드 서버</th></tr></thead>
+  <tbody>
+    <tr><td>인증 (누구인가?)</td><td>❌ 흉내만</td><td>✅ 서버가 비밀번호/SSO 검증, 세션·토큰 발급</td></tr>
+    <tr><td>인가 (무엇을 볼 수 있나?)</td><td>❌ 전부 공개</td><td>✅ 사용자·역할별로 다른 데이터</td></tr>
+    <tr><td>비밀 보관</td><td>❌ 모든 파일이 공개</td><td>✅ 서버 환경 변수·Secret 저장소</td></tr>
+    <tr><td>감사 로그</td><td>❌ 누가 봤는지 모름</td><td>✅ 접근 기록</td></tr>
+    <tr><td>입력 검증</td><td>△ 워크플로우가 간접 처리</td><td>✅ 업로드 즉시 형식·크기·권한 검사</td></tr>
+    <tr><td>비용·운영</td><td>✅ 무료, 관리 거의 없음</td><td>△ 서버 비용, 보안 패치, 모니터링</td></tr>
+  </tbody>
+</table>
+<div class="callout callout-tip">
+  <span class="callout-title">그럼 오늘 구조는 언제 써도 될까?</span>
+  <b>공개되어도 괜찮은 데이터</b>(사내 공지 통계, 오픈 데이터, 개인 포트폴리오 등)라면 훌륭한 선택입니다. 또는 GitHub Enterprise의 <b>Private Pages</b>처럼 플랫폼이 접근 제어를 대신해 주는 경우에 한해 내부 데이터를 다룰 수 있어요.
+  <b>매출·개인정보처럼 비밀이어야 하는 데이터라면 백엔드(또는 인증을 제공하는 플랫폼)가 반드시 필요합니다.</b>
+</div>
+
+<h2>한계 3 · Windows runner보다 Linux 병렬이 더 가치 있다</h2>
+<p>
+  우리가 Windows를 쓴 이유는 단 하나, xlwings(=Excel 앱)를 쓰기 위해서였어요. 그런데 GitHub이 제공하는 Windows runner에는 <b>Excel이 설치되어 있지 않아</b> 결국 openpyxl로 대체되었죠.
+  진짜 Excel을 쓰려면 Office가 설치된 <b>self-hosted Windows runner</b>를 직접 운영해야 하고, 라이선스와 서버 관리 부담이 생깁니다.
+</p>
+<table>
+  <thead><tr><th></th><th>Windows + xlwings</th><th>Linux + openpyxl/pandas</th></tr></thead>
+  <tbody>
+    <tr><td>Runner 준비 시간</td><td>길다 (Windows 부팅, 무거운 이미지)</td><td>짧다</td></tr>
+    <tr><td>과금 (private 저장소)</td><td>분당 <b>2배</b> 배수</td><td>기준(1배)</td></tr>
+    <tr><td>Excel 필요</td><td>예 → hosted runner엔 없음, self-hosted 필요</td><td>아니요</td></tr>
+    <tr><td>동시 실행</td><td>Excel은 한 PC에서 여러 개 띄우기 불안정</td><td>matrix로 수십 개 파일 동시 처리</td></tr>
+    <tr><td>수식 재계산</td><td>✅ Excel이 계산</td><td>△ 캐시 값만 (필요하면 LibreOffice 헤드리스로 재계산)</td></tr>
+  </tbody>
+</table>
+
+<h3>숫자로 비교해 보기</h3>
+<p>엑셀 파일이 여러 개라면 차이는 더 커집니다. 슬라이더를 움직여 보세요. (시간 값은 설명을 위한 <b>예시 가정치</b>이고, 실제 단가는 <a href="https://docs.github.com/billing/managing-billing-for-github-actions/about-billing-for-github-actions" target="_blank" rel="noopener">GitHub Actions 요금 문서</a>를 확인하세요.)</p>
+<div data-widget="runner-compare"></div>
+
+<h3>Linux 병렬 버전 워크플로우 맛보기</h3>
+<p><code>strategy.matrix</code>를 쓰면 같은 Job을 입력만 바꿔 <b>동시에</b> 여러 개 실행합니다.</p>
+<pre data-lang="yaml">jobs:
+  convert:
+    runs-on: ubuntu-latest            # 빠르고 저렴한 Linux
+    strategy:
+      max-parallel: 10
+      matrix:
+        file: [seoul.xlsx, busan.xlsx, daegu.xlsx, gwangju.xlsx, daejeon.xlsx]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install openpyxl
+      - run: python scripts/excel_to_json.py "data/${{ matrix.file }}" --engine openpyxl --out "build/${{ matrix.file }}.json"
+      - uses: actions/upload-artifact@v4
+        with: { name: "json-${{ matrix.file }}", path: build/, retention-days: 1 }
+
+  publish:                            # 모든 변환이 끝나면 한 번만 합쳐서 배포
+    needs: convert
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+      # ... JSON 합치기 → docs 브랜치에 push</pre>
+<div class="callout">
+  <span class="callout-title">핵심 메시지</span>
+  CI/CD의 가치는 "자동으로 돈다"가 아니라 <b>"빠르고, 싸고, 똑같이, 동시에 많이"</b> 돈다는 데 있습니다. 특정 OS·GUI 앱에 묶이면 그 장점을 대부분 잃어요.
+  엑셀 처리라면 <b>Linux + 파이썬 라이브러리 + matrix 병렬</b>이 기본값이고, Excel 앱이 꼭 필요한 예외만 self-hosted Windows로 분리하세요.
+</div>
+
+<h2>다음 단계 추천</h2>
+<ul class="checklist" data-checklist="next-steps">
+  <li><b>Branch protection</b> 켜기 — main에 직접 push 금지, PR 리뷰·테스트 통과 필수</li>
+  <li><b>테스트 자동화</b> — PR마다 <code>pytest</code>를 돌리는 워크플로우 추가 (Linux!)</li>
+  <li><b>워크플로우 보안 학습</b> — <code>permissions</code> 최소화, Action 버전 SHA 고정, Dependabot</li>
+  <li><b>작은 백엔드 만들어 보기</b> — FastAPI/Express로 로그인 + 데이터 API, 컨테이너로 배포</li>
+  <li><b>Git 더 깊이</b> — <code>rebase</code>, <code>stash</code>, <code>cherry-pick</code>, <code>revert</code> (이미 push한 커밋을 안전하게 되돌리는 법)</li>
+</ul>

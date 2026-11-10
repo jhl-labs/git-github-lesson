@@ -1,0 +1,87 @@
+<h1>Step 4 · Pages 대시보드와 로그인</h1>
+<p class="lede">docs 브랜치에 올라간 <code>data.json</code>을 읽어 차트와 표로 보여주는 웹 페이지를 만들고, GitHub Pages로 공개합니다. 그리고 비밀번호 화면을 붙여요.</p>
+
+<h2>잠깐 이론: GitHub Pages</h2>
+<p>
+  GitHub Pages는 저장소의 특정 브랜치(또는 폴더)에 있는 파일을 <code>https://아이디.github.io/저장소이름/</code> 주소로 그대로 공개하는 <b>정적 호스팅</b>입니다.
+  "정적"이라는 말이 중요해요. 서버가 요청마다 프로그램을 실행하는 게 아니라, <b>파일을 있는 그대로 내려줄 뿐</b>입니다.
+</p>
+<table>
+  <thead><tr><th>할 수 있는 것</th><th>할 수 없는 것</th></tr></thead>
+  <tbody>
+    <tr><td>HTML, CSS, JavaScript, 이미지, JSON 파일 서빙</td><td>서버에서 코드 실행 (Python, Node 서버, DB 연결)</td></tr>
+    <tr><td>브라우저에서 JavaScript로 화면 그리기</td><td>사용자별로 다른 응답 주기, 진짜 로그인 세션</td></tr>
+    <tr><td>무료, HTTPS 자동</td><td>파일 접근 차단 (공개 저장소라면 모든 파일이 공개)</td></tr>
+  </tbody>
+</table>
+<p>이 마지막 줄이 <a href="#/limits">한계 장</a>의 핵심 복선입니다. 일단 만들어 보죠.</p>
+
+<h2>4-1. 대시보드 만들기</h2>
+<pre data-lang="bash">git switch -c feature/dashboard</pre>
+<figure class="prompt-card">
+  <figcaption>프롬프트 4 · 비밀번호 화면이 있는 대시보드</figcaption>
+  <pre>dashboard/ 폴더에 GitHub Pages로 서빙할 정적 대시보드를 만들어줘. 빌드 도구 없이 순수 HTML/CSS/JS로.
+
+## 파일
+- dashboard/index.html, app.js, style.css, config.js
+
+## 로그인 (학습용 흉내)
+- config.js 에 window.DASHBOARD_CONFIG = { title, passwordSha256, dataUrl: 'data/data.json', sessionKey }
+- 비밀번호 입력 → crypto.subtle 로 SHA-256 해시 → passwordSha256 과 같으면 sessionStorage 에 로그인 표시
+- 틀리면 오류 문구. 로그아웃 버튼. 로그인 화면 하단에 "학습용 흉내 로그인입니다" 안내
+- 비밀번호 원문은 어디에도 저장하지 마
+
+## 대시보드
+- data.json 형식: { generatedAt, source: { file, issue, engine }, sheets: [{ name, columns:[{name,type}], rows:[{...}], summary:{ rowCount, totals } }] }
+- 상단: 제목, 원본 파일명·이슈 번호·변환 엔진·갱신 시각, 시트 선택
+- KPI 카드: 행 수 + 숫자 열 합계 최대 3개 (천 단위 콤마)
+- 막대 차트: "기준 열"(텍스트) 별 "값 열"(숫자) 합계. 두 열을 select 로 고를 수 있게. Chart.js 4.4.1 CDN 사용(SRI integrity 포함)
+- 원본 데이터 표: 검색창으로 필터, 숫자는 오른쪽 정렬, 500행까지만 표시
+- data.json 이 없으면(404) "이슈로 엑셀을 올려 주세요" 빈 화면
+- 사용자 데이터는 반드시 textContent 로 출력 (innerHTML 금지)
+- 모바일에서도 보기 좋게, 다크 모드 지원
+
+## 화면 재배포 워크플로우: .github/workflows/deploy-dashboard.yml
+- main 의 dashboard/** 가 바뀌면 scripts/publish_docs.sh 로 docs 브랜치에 반영 (데이터는 유지)
+- 엑셀을 읽을 필요가 없으니 runs-on: ubuntu-latest, workflow_dispatch 로 수동 실행도 가능하게
+
+마지막으로 로컬에서 확인하는 방법을 알려줘.</pre>
+</figure>
+
+<h2>4-2. 내 비밀번호로 바꾸기</h2>
+<p><code>config.js</code>에는 비밀번호가 아니라 비밀번호의 <b>SHA-256 해시</b>를 넣습니다. 아래 생성기로 만들어 붙여넣으세요. (계산은 이 브라우저 안에서만 일어나요.)</p>
+<div data-widget="hash-generator"></div>
+
+<h2>4-3. 로컬에서 미리 보기</h2>
+<p>샘플 데이터로 화면을 먼저 확인해 봅시다. <code>dashboard/data/</code>는 커밋하지 않도록 주의하세요.</p>
+<pre data-lang="bash">mkdir -p dashboard/data
+python scripts/excel_to_json.py sales-2026-h1.xlsx --out dashboard/data/data.json
+python -m http.server 8000 --directory dashboard
+# 브라우저에서 http://localhost:8000 접속 → 확인 후
+rm -r dashboard/data</pre>
+<p>완성된 모습은 <a href="demo/" target="_blank" rel="noopener">완성 예시</a>(비밀번호 <code>gitpages2026</code>)와 비교해 보세요.</p>
+<figure class="shot" data-src="assets/img/screens/dashboard-done.png">
+  <figcaption>완성된 대시보드 — KPI 카드, 그룹별 막대 차트, 검색 가능한 표</figcaption>
+</figure>
+
+<h2>4-4. 배포하고 Pages 켜기</h2>
+<ol class="steps">
+  <li><strong>main에 합치고 push</strong> — deploy-dashboard 워크플로우가 docs 브랜치를 처음 만들어 줍니다.
+    <pre data-lang="bash">git add .
+git commit -m "비밀번호 화면이 있는 대시보드 추가"
+git switch main && git merge feature/dashboard && git push</pre>
+  </li>
+  <li><strong>Actions 탭에서 "Deploy Dashboard" 성공 확인</strong> — 저장소의 브랜치 목록에 <code>docs</code>가 생겼는지 보세요.</li>
+  <li><strong>Settings → Pages</strong> — Source: <b>Deploy from a branch</b>, Branch: <b>docs</b> / <b>/(root)</b> → Save
+    <figure class="shot" data-src="assets/img/screens/pages-settings.png">
+      <figcaption>Settings → Pages에서 docs 브랜치 선택</figcaption>
+    </figure>
+  </li>
+  <li><strong>1~2분 뒤 주소 접속</strong> — <code>https://&lt;아이디&gt;.github.io/excel-dashboard/</code>. 아직 데이터가 없어 "엑셀을 올려 주세요" 화면이 나오면 정상!</li>
+</ol>
+
+<div class="callout">
+  <span class="callout-title">🔁 지금까지의 흐름 정리</span>
+  <b>main</b> 브랜치 = 사람이 관리하는 소스 코드 / <b>docs</b> 브랜치 = 봇이 만드는 배포 결과물.
+  브랜치는 "기능 개발용"뿐 아니라 이렇게 <b>용도를 나누는</b> 데도 쓰입니다.
+</div>

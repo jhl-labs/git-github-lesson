@@ -1,0 +1,72 @@
+<h1>치트시트 · 프롬프트 모음</h1>
+<p class="lede">오늘 배운 명령과 프롬프트를 한곳에 모았습니다. 북마크해 두고 필요할 때 꺼내 쓰세요.</p>
+
+<h2>Git 명령 치트시트</h2>
+<table>
+  <thead><tr><th>상황</th><th>명령</th></tr></thead>
+  <tbody>
+    <tr><td>처음 설정</td><td><code>git config --global user.name "이름"</code><br /><code>git config --global user.email "메일"</code></td></tr>
+    <tr><td>새 저장소 / 복제</td><td><code>git init</code> · <code>git clone &lt;주소&gt;</code></td></tr>
+    <tr><td>상태 확인</td><td><code>git status</code> · <code>git status -s</code></td></tr>
+    <tr><td>무엇이 바뀌었나</td><td><code>git diff</code>(작업↔스테이징) · <code>git diff --staged</code>(스테이징↔커밋)</td></tr>
+    <tr><td>스테이징</td><td><code>git add 파일</code> · <code>git add .</code></td></tr>
+    <tr><td>커밋</td><td><code>git commit -m "메시지"</code> · <code>git commit -am "메시지"</code>(추적 중인 파일 한 번에)</td></tr>
+    <tr><td>기록 보기</td><td><code>git log --oneline --all</code> · <code>git show 커밋</code></td></tr>
+    <tr><td>브랜치</td><td><code>git branch</code> · <code>git switch -c 새브랜치</code> · <code>git switch main</code> · <code>git branch -d 브랜치</code></td></tr>
+    <tr><td>병합</td><td><code>git merge 브랜치</code> · 충돌 시 파일 수정 → <code>git add</code> → <code>git commit</code> · 취소 <code>git merge --abort</code></td></tr>
+    <tr><td>원격</td><td><code>git remote -v</code> · <code>git push -u origin main</code> · <code>git fetch</code> · <code>git pull</code></td></tr>
+    <tr><td>파일 수정 취소</td><td><code>git restore 파일</code></td></tr>
+    <tr><td>스테이징 취소</td><td><code>git restore --staged 파일</code></td></tr>
+    <tr><td>마지막 커밋 취소 (push 전)</td><td><code>git reset --soft HEAD~1</code>(변경 유지) · <code>git reset --hard HEAD~1</code>(변경 삭제 ⚠️)</td></tr>
+    <tr><td>push한 커밋 되돌리기</td><td><code>git revert 커밋</code> (되돌리는 새 커밋을 만듦 — 이력을 지우지 않아 안전)</td></tr>
+  </tbody>
+</table>
+
+<h2>GitHub CLI(gh) 치트시트</h2>
+<pre data-lang="bash">gh repo create 이름 --public --clone      # 저장소 생성 + clone
+gh issue list / gh issue view 3            # 이슈
+gh pr create --fill                        # 현재 브랜치로 PR 생성
+gh pr diff 1 / gh pr checks 1              # PR 변경 내용 / 검사 상태
+gh pr merge 1 --squash --delete-branch     # PR 병합
+gh run list / gh run watch                 # Actions 실행 목록 / 실시간 보기
+gh run view &lt;id&gt; --log-failed              # 실패한 단계 로그만
+gh secret set 이름                          # Actions Secret 등록</pre>
+
+<h2>용어집</h2>
+<table>
+  <thead><tr><th>용어</th><th>한 줄 설명</th></tr></thead>
+  <tbody>
+    <tr><td>Repository (저장소)</td><td>프로젝트 파일 + 전체 변경 이력. <code>.git</code> 폴더가 본체</td></tr>
+    <tr><td>Commit</td><td>특정 시점의 스냅샷. 고유 해시 ID와 부모 커밋을 가짐</td></tr>
+    <tr><td>Staging Area (Index)</td><td>다음 커밋에 넣을 변경을 모아두는 곳</td></tr>
+    <tr><td>Branch</td><td>커밋을 가리키는 이동식 이름표</td></tr>
+    <tr><td>HEAD</td><td>지금 내가 보고 있는 브랜치(커밋)를 가리키는 표시</td></tr>
+    <tr><td>Merge / Conflict</td><td>두 브랜치 합치기 / 같은 줄을 다르게 고쳐 자동으로 못 합치는 상황</td></tr>
+    <tr><td>Remote / origin</td><td>원격 저장소 / 그 기본 별명</td></tr>
+    <tr><td>Pull Request</td><td>내 브랜치를 합쳐 달라는 GitHub의 요청·리뷰 공간</td></tr>
+    <tr><td>Workflow / Job / Step</td><td>Actions 자동화 파일 / runner 한 대의 작업 묶음 / 개별 명령</td></tr>
+    <tr><td>Runner</td><td>워크플로우를 실행하는 가상 머신 (GitHub-hosted 또는 self-hosted)</td></tr>
+    <tr><td>Secret</td><td>워크플로우에서 쓰는 암호화된 비밀 값</td></tr>
+    <tr><td>GitHub Pages</td><td>저장소 파일을 웹사이트로 공개하는 정적 호스팅</td></tr>
+  </tbody>
+</table>
+
+<h2>실습 프롬프트 전체</h2>
+<p>각 Step 페이지의 프롬프트를 다시 보려면 링크를 누르세요.</p>
+<div class="cards">
+  <a class="card" href="#/github"><span class="card-icon">1</span><h4>프로젝트 설명서</h4><p>CLAUDE.md 만들기</p></a>
+  <a class="card" href="#/step-converter"><span class="card-icon">2</span><h4>변환기</h4><p>엑셀 → JSON + 테스트</p></a>
+  <a class="card" href="#/step-actions"><span class="card-icon">3</span><h4>워크플로우</h4><p>이슈 → Windows → docs</p></a>
+  <a class="card" href="#/step-pages"><span class="card-icon">4</span><h4>대시보드</h4><p>로그인 + 차트 + 표</p></a>
+  <a class="card" href="#/step-run"><span class="card-icon">5</span><h4>트러블슈팅</h4><p>실패 로그 분석</p></a>
+  <a class="card" href="#/step-review"><span class="card-icon">6·7</span><h4>PR과 리뷰</h4><p>기능 PR + AI 리뷰 자동화</p></a>
+</div>
+
+<h2>좋은 프롬프트 체크리스트</h2>
+<ul class="checklist" data-checklist="prompt-tips">
+  <li><b>목표</b>를 한 문장으로 먼저 말했다 (무엇을, 왜)</li>
+  <li><b>입력과 출력</b>의 형식을 예시로 보여줬다 (파일 경로, JSON 모양)</li>
+  <li><b>제약</b>을 적었다 (언어, 라이브러리, 보안 규칙, 하지 말 것)</li>
+  <li><b>확인 방법</b>을 요청했다 (테스트 실행, 실행 결과 보여주기)</li>
+  <li>한 번에 하나의 Step만 시키고, 끝나면 <b>커밋</b>했다</li>
+</ul>
