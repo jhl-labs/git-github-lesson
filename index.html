@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Git·GitHub 실전 입문</title>
+    <meta name="description" content="Git 기본 개념부터 GitHub·Actions·Pages까지, 브라우저 안의 진짜 Git 실습과 바이브 코딩 프로젝트로 배우는 초보 개발자용 튜터 사이트" />
+    <meta name="theme-color" content="#f5f2ea" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#14161c" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" />
+    <link rel="stylesheet" href="assets/css/main.css" />
+    <script>
+      // 테마 깜빡임 방지: 저장된 테마를 CSS 로딩 전에 적용
+      try {
+        const t = JSON.parse(localStorage.getItem('gitlesson:theme'));
+        if (t) document.documentElement.dataset.theme = t;
+      } catch {}
+    </script>
+    <script type="module" src="assets/js/app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">본문으로 건너뛰기</a>
+    <header class="topbar">
+      <button class="icon-btn nav-toggle" type="button" aria-label="목차 열기" aria-expanded="false" aria-controls="sidebar">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+      </button>
+      <a class="brand" href="#/home" aria-label="홈">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+          <path d="M9 6v20M9 16c0-5 14-4 14-10" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" />
+          <circle cx="9" cy="6" r="3.4" fill="var(--c-repo)" />
+          <circle cx="9" cy="26" r="3.4" fill="var(--c-stage)" />
+          <circle cx="23" cy="6" r="3.4" fill="var(--c-work)" />
+        </svg>
+        <span class="brand-text"><strong>Git·GitHub 실전 입문</strong><small>바이브 코딩으로 끝내는 하루 과정</small></span>
+      </a>
+      <div class="topbar-progress" title="학습 진행률">
+        <div class="progress progress-thin"><span id="course-progress-bar"></span></div>
+        <span id="course-progress-text">0%</span>
+      </div>
+      <button class="icon-btn theme-toggle" type="button" aria-label="다크 모드 전환">
+        <svg class="i-sun" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="2" /><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+        <svg class="i-moon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" /></svg>
+      </button>
+    </header>
+    <div class="shell">
+      <nav id="sidebar" class="sidebar" aria-label="강의 목차"></nav>
+      <div class="scrim" hidden></div>
+      <main id="content" class="content" tabindex="-1">
+        <div class="page-loading"><span class="spinner"></span>불러오는 중…</div>
+      </main>
+    </div>
+    <noscript><p class="noscript">이 사이트는 JavaScript가 필요합니다.</p></noscript>
+  </body>
+</html>
