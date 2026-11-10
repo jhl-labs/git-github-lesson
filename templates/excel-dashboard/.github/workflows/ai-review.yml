@@ -17,8 +17,8 @@ jobs:
     # 외부 fork에서 온 PR에는 Secret이 전달되지 않으므로 같은 저장소 PR만 리뷰
     if: github.event.pull_request.head.repo.full_name == github.repository
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
       - name: Claude Code 설치

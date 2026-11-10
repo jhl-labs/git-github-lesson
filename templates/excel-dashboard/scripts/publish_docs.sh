@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # dashboard/ 의 정적 파일과 build/data.json 을 docs 브랜치에 커밋·push 한다.
-# GitHub Pages는 docs 브랜치를 그대로 웹사이트로 서빙한다.
+# docs 브랜치 = 배포할 결과물 + 데이터 변경 이력. 실제 Pages 배포는 pages-deploy.yml 이 한다.
+# (GITHUB_TOKEN으로 push한 커밋은 Pages 빌드를 자동으로 트리거하지 않기 때문)
 #
 #   사용법: bash scripts/publish_docs.sh "커밋 메시지"
 #   - build/data.json 이 있으면 data/data.json 으로 함께 반영

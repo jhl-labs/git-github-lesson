@@ -12,7 +12,7 @@
 | `actions-run-detail.png` | Step 3 | Actions 실행 상세(Step별 로그 펼침) |
 | `actions-permissions.png` | Step 3 | Settings → Actions → General → Workflow permissions |
 | `dashboard-done.png` | Step 4 | 완성된 대시보드(KPI·차트·표) |
-| `pages-settings.png` | Step 4 | Settings → Pages에서 docs 브랜치 선택 |
+| `pages-settings.png` | Step 4 | Settings → Pages에서 Source를 "GitHub Actions"로 선택 |
 | `issue-template-choose.png` | Step 5 | New issue의 템플릿 선택 화면 |
 | `issue-attach-excel.png` | Step 5 | 이슈 본문에 엑셀을 끌어다 놓은 화면 |
 | `actions-running.png` | Step 5 | Windows runner에서 실행 중인 워크플로우 |

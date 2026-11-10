@@ -92,7 +92,7 @@
   <thead><tr><th></th><th>Windows + xlwings</th><th>Linux + openpyxl/pandas</th></tr></thead>
   <tbody>
     <tr><td>Runner 준비 시간</td><td>길다 (Windows 부팅, 무거운 이미지)</td><td>짧다</td></tr>
-    <tr><td>과금 (private 저장소)</td><td>분당 <b>2배</b> 배수</td><td>기준(1배)</td></tr>
+    <tr><td>과금 (private 저장소, 무료 사용량 초과 시)</td><td>분당 <b>$0.010</b> (2코어, 작성 시점) — Linux의 약 1.7배</td><td>분당 <b>$0.006</b> (2코어)</td></tr>
     <tr><td>Excel 필요</td><td>예 → hosted runner엔 없음, self-hosted 필요</td><td>아니요</td></tr>
     <tr><td>동시 실행</td><td>Excel은 한 PC에서 여러 개 띄우기 불안정</td><td>matrix로 수십 개 파일 동시 처리</td></tr>
     <tr><td>수식 재계산</td><td>✅ Excel이 계산</td><td>△ 캐시 값만 (필요하면 LibreOffice 헤드리스로 재계산)</td></tr>
@@ -100,7 +100,7 @@
 </table>
 
 <h3>숫자로 비교해 보기</h3>
-<p>엑셀 파일이 여러 개라면 차이는 더 커집니다. 슬라이더를 움직여 보세요. (시간 값은 설명을 위한 <b>예시 가정치</b>이고, 실제 단가는 <a href="https://docs.github.com/billing/managing-billing-for-github-actions/about-billing-for-github-actions" target="_blank" rel="noopener">GitHub Actions 요금 문서</a>를 확인하세요.)</p>
+<p>엑셀 파일이 여러 개라면 차이는 더 커집니다. 슬라이더를 움직여 보세요. (시간 값은 설명을 위한 <b>예시 가정치</b>이고, 실제 단가는 <a href="https://docs.github.com/en/billing/reference/actions-runner-pricing" target="_blank" rel="noopener">GitHub Actions 요금 문서</a>를 확인하세요.)</p>
 <div data-widget="runner-compare"></div>
 
 <h3>Linux 병렬 버전 워크플로우 맛보기</h3>
@@ -113,19 +113,19 @@
       matrix:
         file: [seoul.xlsx, busan.xlsx, daegu.xlsx, gwangju.xlsx, daejeon.xlsx]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with: { python-version: "3.12", cache: pip }
       - run: pip install openpyxl
       - run: python scripts/excel_to_json.py "data/${{ matrix.file }}" --engine openpyxl --out "build/${{ matrix.file }}.json"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with: { name: "json-${{ matrix.file }}", path: build/, retention-days: 1 }
 
   publish:                            # 모든 변환이 끝나면 한 번만 합쳐서 배포
     needs: convert
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
       # ... JSON 합치기 → docs 브랜치에 push</pre>
 <div class="callout">
   <span class="callout-title">핵심 메시지</span>

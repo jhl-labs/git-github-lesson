@@ -1,4 +1,4 @@
-# 이슈에 첨부된 엑셀 → (Windows + xlwings) → JSON → docs 브랜치 → GitHub Pages
+# 이슈에 첨부된 엑셀 → (Windows + xlwings) → JSON → docs 브랜치에 커밋 → GitHub Pages 배포
 name: Excel → Dashboard
 
 on:
@@ -25,10 +25,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: 코드 받기
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Python 준비
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -67,7 +67,7 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
         run: |
-          gh issue comment "$ISSUE_NUMBER" --body "✅ 변환 완료! 1~2분 뒤 대시보드에 반영됩니다: ${PAGES_URL}
+          gh issue comment "$ISSUE_NUMBER" --body "✅ 변환 완료! 이어서 Pages 배포(deploy job)가 실행되고, 끝나면 대시보드에 반영됩니다: ${PAGES_URL}
           - 실행 로그: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           gh issue close "$ISSUE_NUMBER" --reason completed
 
@@ -79,3 +79,13 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           gh issue comment "$ISSUE_NUMBER" --body "❌ 변환에 실패했습니다. 로그를 확인해 주세요: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+  # GITHUB_TOKEN으로 push한 커밋은 Pages 빌드를 트리거하지 않으므로, 배포 워크플로우를 직접 호출한다
+  deploy:
+    needs: convert
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+      actions: read
+    uses: ./.github/workflows/pages-deploy.yml
