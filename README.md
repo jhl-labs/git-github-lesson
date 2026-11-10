@@ -2,6 +2,8 @@
 
 Git 개념이 아직 잡히지 않은 초보 개발자를 위한 웹 기반 튜터 사이트입니다. GitHub Pages로 그대로 서빙됩니다.
 
+**사이트 주소:** https://jhl-labs.github.io/git-github-lesson/ (main 브랜치 루트를 Pages로 배포, 별도 워크플로우 없음)
+
 - **PART 1 · Git** — 핵심 개념 + 브라우저 속 **진짜 Git(libgit2 → WebAssembly)** 실습실. 미션 6개(첫 커밋, 스테이징, 브랜치·병합, 충돌, 원격 push/pull, 되돌리기)를 저장소 상태로 자동 판정하고 작업 디렉터리·스테이징·커밋 그래프·가상 GitHub를 실시간으로 시각화합니다.
 - **PART 2 · GitHub / Actions / Pages** — Claude Code 프롬프트(복사·붙여넣기)로 만드는 실전 프로젝트:
   이슈에 엑셀 첨부 → Windows runner + xlwings 변환 → `docs` 브랜치에 JSON 커밋 → Pages 대시보드(비밀번호 화면) + PR과 AI 코드 리뷰(`claude -p`, `opencode run`).
