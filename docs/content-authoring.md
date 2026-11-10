@@ -22,6 +22,8 @@
 | Git 실습실 | `<div data-git-lab></div>` (`data-mission="branch"`로 시작 미션 지정 가능) | |
 | 위젯 | `<div data-widget="hash-generator"></div>` | `assets/js/widgets/<이름>.js`의 `mount(node)` |
 | 시작 전 이론 | `<section class="theory"><h2>📚 시작 전 이론: …</h2> … <dl class="theory-terms"><div><dt>용어</dt><dd>설명</dd></div></dl> … <div class="theory-check">셀프 체크</div></section>` | 각 Step 맨 위, lede 바로 아래 |
+| Step 마무리 | `<section class="wrapup"><h2>🏁 마무리: …</h2>` 한 일(`ol.steps`) · 결과물 · 핵심 정리(`dl.theory-terms`) · 확인 체크리스트(`data-checklist="wrapup-<id>"`) · `<div class="wrapup-next">` 다음 Step</section>` | 각 Step 맨 끝 |
+| 같은 페이지 앵커 링크 | `<a href="#/페이지id#요소id">` | 라우터가 다시 그리지 않고 해당 위치로 스크롤 |
 
 ## Git 미션 추가
 
@@ -36,3 +38,7 @@
 미션 도중 일어나는 외부 사건(예: 동료의 push)은 `extra: { label, action }`으로 버튼을 하나 더 둔다.
 
 미션을 바꾼 뒤에는 Node로 전체 미션을 끝까지 실행해 모든 단계가 통과하는지 확인한다(각 단계의 `cmds`를 순서대로 실행하고 `check`를 평가).
+
+## Git 핵심 개념 페이지와 실습실의 관계
+
+`pages/git-concepts.html`은 실습실 미션 9개에서 쓰는 개념을 **모두** 미션 순서대로 다룬다. 절 제목의 `[미션 N]` 표시와 맨 아래 "개념 지도" 표가 미션 ↔ 개념 ↔ 명령을 잇는다. 미션을 추가·변경하면 이 페이지의 해당 절과 개념 지도도 함께 고친다.

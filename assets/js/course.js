@@ -13,7 +13,7 @@ export const COURSE = [
   {
     part: 'PART 1 · Git',
     pages: [
-      { id: 'git-concepts', title: 'Git 핵심 개념', minutes: 20 },
+      { id: 'git-concepts', title: 'Git 핵심 개념', minutes: 35 },
       { id: 'git-lab', title: '인터랙티브 Git 실습실', minutes: 70, wide: true, badge: 'LAB' },
     ],
   },

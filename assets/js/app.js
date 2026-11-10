@@ -192,8 +192,11 @@ document.addEventListener('keydown', (e) => e.key === 'Escape' && setNavOpen(fal
 
 let lastPage = null;
 window.addEventListener('hashchange', () => {
-  // 같은 페이지 내 앵커 이동이면 다시 그리지 않는다
-  if (currentId() === lastPage && location.hash.split('#').length > 2) return;
+  // 같은 페이지 내 앵커 이동(본문 링크 #/페이지#id)이면 다시 그리지 않고 그 위치로 스크롤만 한다
+  if (currentId() === lastPage && location.hash.split('#').length > 2) {
+    document.getElementById(location.hash.split('#')[2])?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
   lastPage = currentId();
   render();
 });

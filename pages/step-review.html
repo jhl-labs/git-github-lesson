@@ -194,3 +194,45 @@ git add . && git commit -m "리뷰 반영: CSV 이스케이프 보강" && git pu
 gh pr merge 1 --squash --delete-branch   # 여러 커밋을 하나로 합쳐 main에 병합
 git switch main && git pull</pre>
 <p>main에 합쳐지면 <code>deploy-dashboard</code> 워크플로우가 실행되어 Pages에도 CSV 버튼이 생깁니다. <b>코드 리뷰 → 병합 → 자동 배포</b>, 실무 개발 흐름 한 바퀴를 완주했어요! 🎉</p>
+
+<section class="wrapup">
+  <h2>🏁 마무리: 리뷰 → 병합 → 자동 배포, 한 바퀴 완주</h2>
+  <p>
+    대시보드에 CSV 다운로드 기능을 기능 브랜치에서 만들고 PR로 올렸습니다. <code>claude -p</code>·opencode로 diff를 리뷰받고,
+    PR마다 자동으로 리뷰 댓글을 다는 워크플로우까지 붙였어요. 리뷰를 반영해 Squash merge하자 Pages가 자동으로 다시 배포됐습니다.
+  </p>
+  <h3>✅ 이번 Step에서 한 일</h3>
+  <ol class="steps">
+    <li><strong>기능 브랜치에서 작업하고 PR 열기</strong> <code>feature/csv-download</code>에서 CSV 버튼을 만들고 <code>gh pr create</code>로 PR을 열었어요.</li>
+    <li><strong>CLI로 AI 리뷰</strong> <code>gh pr diff 1 | claude -p "..."</code>(또는 opencode)로 리뷰를 받아 <code>gh pr comment</code>로 PR에 남겼어요.</li>
+    <li><strong>자동 리뷰 워크플로우</strong> <code>ANTHROPIC_API_KEY</code>를 Secret으로 등록하고 <code>ai-review.yml</code>을 만들어 PR마다 리뷰가 달리게 했어요.</li>
+    <li><strong>리뷰 연습</strong> innerHTML XSS와 이슈 제목 인젝션을 일부러 넣은 PR로 AI가 잡아내는지 확인하고, 그 PR은 merge하지 않고 닫았어요.</li>
+    <li><strong>리뷰 반영 후 Merge</strong> 고친 코드를 같은 브랜치에 push하고 <code>gh pr merge 1 --squash --delete-branch</code>로 합쳤어요.</li>
+  </ol>
+  <h3>📦 만들어진 결과물</h3>
+  <ul>
+    <li>대시보드의 "CSV 다운로드" 버튼 (<code>dashboard/</code> 변경, UTF-8 BOM·CSV 이스케이프)</li>
+    <li><code>.github/workflows/ai-review.yml</code>, <code>.github/review-prompt.md</code> — PR 자동 리뷰</li>
+    <li>저장소 Secret <code>ANTHROPIC_API_KEY</code></li>
+    <li>리뷰 댓글이 달린 PR과 main의 squash 커밋 1개, 닫힌 연습용 PR</li>
+    <li><code>deploy-dashboard</code> 워크플로우로 다시 배포된 Pages 대시보드</li>
+  </ul>
+  <h3>💡 핵심 정리</h3>
+  <dl class="theory-terms">
+    <div><dt>PR은 GitHub 기능</dt><dd>합치기 전에 멈춰서 diff를 보고 의견을 나누는 장치. 같은 브랜치에 push하면 PR에 자동 반영돼요.</dd></div>
+    <div><dt>diff 리뷰</dt><dd>바뀐 줄이 어떤 입력을 받아 어디에 쓰이는지 따라가세요. 보안 문제는 외부 입력이 innerHTML·셸 명령에 닿을 때 생깁니다.</dd></div>
+    <div><dt>headless AI 리뷰</dt><dd><code>claude -p</code>는 한 번 답하고 끝나서 자동화에 넣기 좋아요. runner에서는 API 키를 Secret으로 넘기고, 외부 fork PR은 건너뜁니다.</dd></div>
+    <div><dt>다른 AI, 최종 판단은 사람</dt><dd>맥락 없는 새 세션이나 다른 도구가 더 객관적이지만, AI도 틀린 지적을 자신 있게 할 수 있어요.</dd></div>
+    <div><dt>Squash and merge</dt><dd>브랜치의 여러 커밋을 하나로 뭉쳐 main에 커밋 1개로 남깁니다.</dd></div>
+  </dl>
+  <h3>🔍 확인하고 넘어가기</h3>
+  <ul class="checklist" data-checklist="wrapup-step-review">
+    <li>PR에 "🤖 AI 코드 리뷰" 댓글이 자동으로 달렸다</li>
+    <li>PR이 merge되고 main에 squash 커밋이 1개 생겼다</li>
+    <li>Pages 대시보드에서 CSV 다운로드 버튼이 동작하고, 엑셀로 열어도 한글이 깨지지 않는다</li>
+    <li>연습용 PR은 merge하지 않고 닫았다</li>
+    <li>AI 리뷰 결과를 그대로 믿으면 안 되는 이유를 말할 수 있다</li>
+  </ul>
+  <div class="wrapup-next"><b>➡️ 다음 Step</b> — Step 1~6이 모두 끝났어요. <a href="#/recap">실습 돌아보기</a>에서 오늘 쓴 Git·GitHub 개념을 한 번에 정리하고,
+    <a href="#/limits">한계와 다음 단계</a>에서 지금 만든 서비스의 약점(비밀번호 화면, 공개 데이터, Windows + xlwings 속도)과 실무에서의 해결책을 살펴봅니다.</div>
+</section>

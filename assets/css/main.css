@@ -822,6 +822,39 @@ svg {
   margin-bottom: 0;
 }
 
+/* ── Step 마무리 박스 ─────────────────────────────────
+   <section class="wrapup"><h2>🏁 마무리: …</h2> … </section>  — 각 Step 맨 끝(퀴즈·다음 장 버튼 앞)에서 그 Step을 정리 */
+.wrapup {
+  margin: 40px 0 28px;
+  padding: 22px 24px 8px;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--ok) 35%, var(--line));
+  background: linear-gradient(180deg, var(--ok-soft), var(--bg-elev) 220px);
+  box-shadow: var(--shadow);
+}
+.prose .wrapup > h2 {
+  margin-top: 0;
+}
+.prose .wrapup h3 {
+  margin-top: 20px;
+}
+.wrapup .theory-terms > div {
+  background: var(--bg-elev);
+}
+.wrapup-next {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elev);
+  border: 1px dashed var(--line-strong);
+  font-size: 14.5px;
+}
+
+/* ── 개념 지도(명령 ↔ 개념 표) ─────────────────────── */
+.concept-map td:first-child {
+  white-space: nowrap;
+}
+
 /* ── 스크린샷 ─────────────────────────────────────── */
 .shot {
   margin: 0 0 24px;

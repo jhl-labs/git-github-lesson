@@ -155,3 +155,27 @@
   이 사이트 저장소의 <code>templates/excel-dashboard/</code>에 강사가 검증한 완성 코드가 있습니다.
   Claude Code의 결과물이 이상할 때 비교해 보세요. 단, <b>먼저 직접 프롬프트로 만들어 보는 것</b>이 이 과정의 핵심입니다.
 </div>
+
+<section class="wrapup">
+  <h2>🏁 마무리: 오늘 만들 서비스의 큰 그림</h2>
+  <p>
+    이 장에서는 코드를 쓰지 않고, 앞으로 Step 1~6에서 만들 서비스의 <b>전체 지도</b>를 그렸습니다.
+    서버 없이 GitHub 기능 네 가지(Repository · Issues · Actions · Pages)를 조합해 "엑셀 업로드 → 자동 변환 → 웹 대시보드"를 만든다는 것이 핵심이에요.
+  </p>
+  <h3>💡 이 장에서 이해한 것</h3>
+  <dl class="theory-terms">
+    <div><dt>전체 구조</dt><dd>① 이슈에 엑셀 첨부 → ② Actions의 Windows runner(실제 VM)가 변환 → ③ 봇이 <code>docs</code> 브랜치에 커밋 → ④ Pages가 대시보드로 공개.</dd></div>
+    <div><dt>왜 이런 구조인가</dt><dd>업로드 창구·처리 서버·데이터베이스·웹 서버를 각각 Issues·Actions runner·Git 커밋·Pages가 대신 맡아요. 평소엔 아무것도 돌지 않고, 이벤트가 생길 때만 일합니다.</dd></div>
+    <div><dt>main과 docs</dt><dd><code>main</code>은 사람이 고치는 소스 코드, <code>docs</code>는 봇이 만드는 배포 결과물(<code>data/data.json</code> 포함). 브랜치를 용도별로 나눠 씁니다.</dd></div>
+    <div><dt>Windows + xlwings</dt><dd>실제 Excel을 조종하는 방식을 경험하려고 일부러 고른 구조예요. 실무에서 더 나은 방법은 <a href="#/limits">한계 장</a>에서 비교합니다.</dd></div>
+    <div><dt>최종 저장소 구조</dt><dd><code>.github/</code>(이슈 양식·워크플로우 4개), <code>scripts/</code>(변환·다운로드·배포), <code>dashboard/</code>(화면), <code>tests/</code>, <code>CLAUDE.md</code>. 막히면 <code>templates/excel-dashboard/</code>와 비교하세요.</dd></div>
+  </dl>
+  <h3>🔍 확인하고 넘어가기</h3>
+  <ul class="checklist" data-checklist="wrapup-project">
+    <li>이슈 등록부터 대시보드 표시까지 4단계 흐름을 그림 없이 말할 수 있다</li>
+    <li>runner가 job마다 새로 만들어지고 끝나면 폐기되는 실제 VM이라는 것을 이해했다</li>
+    <li><code>main</code>과 <code>docs</code> 브랜치에 각각 무엇이 들어가는지 구분할 수 있다</li>
+    <li>비밀번호 화면이 "진짜 보안"인지 의심해 볼 거리가 있다는 것을 기억해 두었다</li>
+  </ul>
+  <div class="wrapup-next"><b>➡️ 다음 Step</b> — <a href="#/github">Step 1</a>에서 실제 GitHub에 <code>excel-dashboard</code> 저장소를 만들고 Claude Code를 연결합니다. 이 장의 "최종 저장소 구조"가 그대로 첫 프롬프트(<code>CLAUDE.md</code>)의 폴더 구조가 돼요.</div>
+</section>
