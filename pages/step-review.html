@@ -3,28 +3,89 @@
   지금까지는 혼자 main에 바로 merge 했죠. 실무에서는 <strong>Pull Request(PR)</strong>로 "이 변경을 합쳐도 될까요?"라고 묻고, 동료(또는 AI)가 리뷰한 뒤 합칩니다.
 </p>
 
-<h2>잠깐 이론: Pull Request</h2>
-<figure class="diagram">
-  <svg viewBox="0 0 680 170" role="img" aria-label="feature 브랜치를 push하고 PR을 열어 리뷰 후 main에 병합하는 흐름">
-    <defs>
-      <marker id="ra" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="var(--ink-2)" /></marker>
-    </defs>
-    <g font-size="14" font-weight="800">
-      <rect x="10" y="50" width="130" height="64" rx="12" fill="var(--c-stage-soft)" stroke="var(--c-stage)" stroke-width="2" /><text x="75" y="78" text-anchor="middle">① 브랜치 작업</text><text x="75" y="98" text-anchor="middle" class="d-sub" font-weight="400">commit &amp; push</text>
-      <rect x="180" y="50" width="130" height="64" rx="12" fill="var(--c-remote-soft)" stroke="var(--c-remote)" stroke-width="2" /><text x="245" y="78" text-anchor="middle">② PR 열기</text><text x="245" y="98" text-anchor="middle" class="d-sub" font-weight="400">gh pr create</text>
-      <rect x="350" y="50" width="150" height="64" rx="12" fill="var(--c-repo-soft)" stroke="var(--c-repo)" stroke-width="2" /><text x="425" y="78" text-anchor="middle">③ 리뷰 &amp; 수정</text><text x="425" y="98" text-anchor="middle" class="d-sub" font-weight="400">사람 + AI 에이전트</text>
-      <rect x="540" y="50" width="130" height="64" rx="12" fill="var(--c-work-soft)" stroke="var(--c-work)" stroke-width="2" /><text x="605" y="78" text-anchor="middle">④ Merge</text><text x="605" y="98" text-anchor="middle" class="d-sub" font-weight="400">main에 합치기</text>
-    </g>
-    <g stroke="var(--ink-2)" stroke-width="2.2"><path d="M140 82 H176" marker-end="url(#ra)" /><path d="M310 82 H346" marker-end="url(#ra)" /><path d="M500 82 H536" marker-end="url(#ra)" /></g>
-    <path d="M425 114 C425 160 245 160 245 118" fill="none" stroke="var(--muted)" stroke-dasharray="5 4" stroke-width="2" marker-end="url(#ra)" />
-    <text x="335" y="160" text-anchor="middle" class="d-sub">지적 사항을 고쳐 다시 push 하면 PR에 자동 반영</text>
-  </svg>
-</figure>
-<ul>
-  <li>PR은 GitHub의 기능이에요(Git 명령이 아닙니다). 두 브랜치의 <b>차이(diff)</b>를 보여주고, 줄 단위로 댓글을 달 수 있어요.</li>
-  <li>PR이 열리면 Actions가 테스트·리뷰를 자동 실행할 수 있습니다 (<code>on: pull_request</code>).</li>
-  <li>리뷰어가 "Approve" 하면 <b>Merge</b> 버튼으로 합칩니다. Settings에서 "리뷰 승인 없이는 merge 금지" 규칙(Branch protection)도 걸 수 있어요.</li>
-</ul>
+<section class="theory">
+  <h2>📚 시작 전 이론: Pull Request와 코드 리뷰</h2>
+  <p>
+    PR은 "코드를 합치기 전에 한 번 멈춰서 확인하는 장치"입니다. 이 Step에서는 사람 대신(또는 사람과 함께) AI 에이전트에게 리뷰를 맡기는데,
+    리뷰 결과를 믿을지 말지 판단하려면 PR의 구조와 AI 리뷰의 한계를 알고 있어야 해요.
+  </p>
+  <dl class="theory-terms">
+    <div><dt>Pull Request (PR)</dt><dd>"내 브랜치를 main에 합쳐 주세요"라는 요청. Git 명령이 아니라 <b>GitHub의 기능</b>이에요.</dd></div>
+    <div><dt>diff</dt><dd>두 버전의 차이. <code>-</code>는 지워진 줄, <code>+</code>는 추가된 줄. 리뷰는 diff를 읽는 일입니다.</dd></div>
+    <div><dt>리뷰 상태</dt><dd><b>Comment</b>(의견만), <b>Approve</b>(합쳐도 좋음), <b>Request changes</b>(고쳐야 함) 세 가지로 남겨요.</dd></div>
+    <div><dt>Status check</dt><dd>PR에서 자동 실행된 Actions(테스트·리뷰 등)의 결과. PR 하단에 ✅/❌로 표시돼요.</dd></div>
+    <div><dt>브랜치 보호 (Ruleset)</dt><dd>"PR 없이 main에 직접 push 금지", "승인 1개 이상 필요", "검사 통과 필수" 같은 규칙을 거는 설정.</dd></div>
+    <div><dt>headless 모드</dt><dd>대화 창 없이 한 번 실행하고 결과만 출력하는 방식. <code>claude -p "..."</code>가 그 예예요.</dd></div>
+  </dl>
+
+  <h3>PR의 흐름</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 680 170" role="img" aria-label="feature 브랜치를 push하고 PR을 열어 리뷰 후 main에 병합하는 흐름">
+      <defs>
+        <marker id="ra" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="var(--ink-2)" /></marker>
+      </defs>
+      <g font-size="14" font-weight="800">
+        <rect x="10" y="50" width="130" height="64" rx="12" fill="var(--c-stage-soft)" stroke="var(--c-stage)" stroke-width="2" /><text x="75" y="78" text-anchor="middle">① 브랜치 작업</text><text x="75" y="98" text-anchor="middle" class="d-sub" font-weight="400">commit &amp; push</text>
+        <rect x="180" y="50" width="130" height="64" rx="12" fill="var(--c-remote-soft)" stroke="var(--c-remote)" stroke-width="2" /><text x="245" y="78" text-anchor="middle">② PR 열기</text><text x="245" y="98" text-anchor="middle" class="d-sub" font-weight="400">gh pr create</text>
+        <rect x="350" y="50" width="150" height="64" rx="12" fill="var(--c-repo-soft)" stroke="var(--c-repo)" stroke-width="2" /><text x="425" y="78" text-anchor="middle">③ 리뷰 &amp; 수정</text><text x="425" y="98" text-anchor="middle" class="d-sub" font-weight="400">사람 + AI 에이전트</text>
+        <rect x="540" y="50" width="130" height="64" rx="12" fill="var(--c-work-soft)" stroke="var(--c-work)" stroke-width="2" /><text x="605" y="78" text-anchor="middle">④ Merge</text><text x="605" y="98" text-anchor="middle" class="d-sub" font-weight="400">main에 합치기</text>
+      </g>
+      <g stroke="var(--ink-2)" stroke-width="2.2"><path d="M140 82 H176" marker-end="url(#ra)" /><path d="M310 82 H346" marker-end="url(#ra)" /><path d="M500 82 H536" marker-end="url(#ra)" /></g>
+      <path d="M425 114 C425 160 245 160 245 118" fill="none" stroke="var(--muted)" stroke-dasharray="5 4" stroke-width="2" marker-end="url(#ra)" />
+      <text x="335" y="160" text-anchor="middle" class="d-sub">지적 사항을 고쳐 다시 push 하면 PR에 자동 반영</text>
+    </svg>
+  </figure>
+  <ul>
+    <li>PR은 두 브랜치의 <b>차이(diff)</b>를 보여주고, 줄 단위로 댓글을 달 수 있어요. 같은 브랜치에 push하면 PR에 자동으로 추가됩니다.</li>
+    <li>PR이 열리면 Actions가 테스트·리뷰를 자동 실행할 수 있습니다 (<code>on: pull_request</code>).</li>
+    <li>리뷰어가 "Approve" 하면 <b>Merge</b> 버튼으로 합칩니다. Settings의 브랜치 규칙으로 "승인 없이는 merge 금지"도 걸 수 있어요(공개 저장소는 무료).</li>
+  </ul>
+
+  <h3>diff 읽는 법</h3>
+  <pre data-lang="diff" data-nocopy>diff --git a/dashboard/app.js b/dashboard/app.js
+@@ -120,7 +120,8 @@ function renderTable(rows) {     ← 120번째 줄 근처가 바뀜
+   const cell = document.createElement('td');
+-  cell.innerHTML = value;                       ← 지운 줄
++  cell.textContent = value;                     ← 추가한 줄
++  if (typeof value === 'number') cell.className = 'num';</pre>
+  <p>리뷰할 때는 "무엇이 바뀌었나"보다 <b>"바뀐 줄이 어떤 입력을 받아 어디에 쓰이나"</b>를 따라가 보세요. 보안 문제는 대부분 외부 입력이 위험한 곳(innerHTML, 셸 명령)에 닿을 때 생깁니다.</p>
+
+  <h3>Merge 방법 세 가지</h3>
+  <table>
+    <thead><tr><th>방법</th><th>main에 남는 모습</th><th>언제 쓰나</th></tr></thead>
+    <tbody>
+      <tr><td><b>Create a merge commit</b></td><td>브랜치의 커밋들 + 합쳤다는 merge 커밋 1개</td><td>작업 이력을 그대로 보존하고 싶을 때</td></tr>
+      <tr><td><b>Squash and merge</b></td><td>브랜치의 커밋들을 <b>하나로 뭉친</b> 새 커밋 1개</td><td>"리뷰 반영", "오타" 같은 잔커밋을 정리할 때 (오늘 사용)</td></tr>
+      <tr><td><b>Rebase and merge</b></td><td>브랜치의 커밋들을 main 끝에 <b>한 줄로 다시 붙임</b> (merge 커밋 없음)</td><td>깔끔한 일직선 이력을 원할 때</td></tr>
+    </tbody>
+  </table>
+
+  <h3>AI 리뷰: 잘하는 것과 못하는 것</h3>
+  <table>
+    <thead><tr><th>잘하는 것</th><th>약한 것</th></tr></thead>
+    <tbody>
+      <tr><td>innerHTML·셸 인젝션·하드코딩된 비밀 같은 <b>알려진 위험 패턴</b> 찾기</td><td>diff 밖의 맥락(다른 파일, 저장소 설정, 실제 운영 상황) 판단</td></tr>
+      <tr><td>빠뜨린 예외 처리, 이름·가독성 지적</td><td>"이 기능이 정말 필요한가" 같은 요구사항 판단</td></tr>
+      <tr><td>지치지 않고 모든 PR을 같은 기준으로 확인</td><td>그럴듯하지만 <b>틀린 지적</b>을 자신 있게 하기도 함</td></tr>
+    </tbody>
+  </table>
+
+  <h3>headless 실행과 "다른 에이전트" 리뷰</h3>
+  <p>
+    <code>claude -p</code>는 표준 입력(파이프로 넘긴 diff)과 프롬프트를 받아 답을 출력하고 <b>바로 종료</b>합니다. 사람이 대화하지 않아도 되니 Actions 같은 자동화에 넣을 수 있어요.
+    대신 runner에는 로그인한 사람이 없으므로 API 키를 <b>Secret</b>으로 넘겨야 하고, 외부 fork에서 온 PR에는 Secret이 전달되지 않아 리뷰가 실행되지 않습니다(악의적인 PR이 키를 훔치지 못하게 하는 장치).
+    또 코드를 작성한 세션은 자기가 쓴 맥락에 끌려가기 쉬워서, <b>맥락 없는 새 세션이나 다른 도구</b>(opencode)에게 diff만 보여주는 편이 더 객관적인 리뷰가 됩니다.
+  </p>
+
+  <div class="theory-check"><b>✅ 실습 전 셀프 체크</b>
+    <ul>
+      <li>PR이 Git의 기능이 아니라 GitHub의 기능이라는 말의 뜻을 설명할 수 있나요?</li>
+      <li>diff에서 <code>-</code>와 <code>+</code> 줄, <code>@@</code> 줄의 의미를 말할 수 있나요?</li>
+      <li>Squash and merge를 하면 main에 커밋이 몇 개 생기는지 말할 수 있나요?</li>
+      <li>AI 리뷰 결과를 그대로 믿으면 안 되는 이유를 하나 이상 말할 수 있나요?</li>
+    </ul>
+  </div>
+</section>
 
 <h2>6-1. 기능 브랜치에서 작업하고 PR 열기</h2>
 <p>대시보드에 작은 기능을 추가해 봅시다.</p>

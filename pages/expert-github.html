@@ -1,0 +1,507 @@
+<h1>GitHub 깊이 알기</h1>
+<p class="lede">
+  Git이 "버전 관리 엔진"이라면 GitHub는 그 위에 <strong>사람·권한·리뷰·자동화·보안</strong>을 얹은 협업 플랫폼입니다.
+  이 장은 계정과 권한 구조부터 인증, PR 워크플로우, 브랜치 보호와 rulesets, 보안 기능, <code>gh</code> CLI 활용까지
+  팀에서 GitHub를 "제대로" 운영하는 데 필요한 지식을 정리합니다.
+</p>
+
+<div class="callout">
+  <span class="callout-title">(참고) 실습에 필요하지 않지만…</span>
+  PART 1·2 실습은 이 장 없이도 진행할 수 있습니다. 실습을 끝낸 뒤 팀 저장소를 설계하거나 권한·보안 설정을 정할 때 참고하는 <b>레퍼런스</b>입니다.
+  GitHub 기능은 <b>플랜(요금제)과 저장소 공개 범위에 따라 달라지고 자주 바뀝니다.</b> 이 장에서 <span class="term">플랜 의존</span> 표시가 붙은 항목은 사용 전 링크된 공식 문서를 꼭 확인하세요.
+</div>
+
+<section class="theory">
+  <h2>핵심 용어 한눈에</h2>
+  <dl class="theory-terms">
+    <div><dt>Organization</dt><dd>여러 사람이 저장소를 공동 소유하는 계정. 팀·역할·정책·결제를 한곳에서 관리합니다.</dd></div>
+    <div><dt>Repository role</dt><dd>저장소에 대한 권한 단계. Read·Triage·Write·Maintain·Admin.</dd></div>
+    <div><dt>PAT</dt><dd>Personal Access Token. 비밀번호 대신 쓰는 토큰. classic과 fine-grained 두 종류.</dd></div>
+    <div><dt>GitHub App</dt><dd>사람이 아닌 "앱"으로 설치되어 저장소별·권한별로 짧게 사는 토큰을 받는 통합 방식.</dd></div>
+    <div><dt>Ruleset</dt><dd>브랜치·태그·push에 규칙을 거는 차세대 보호 기능. 여러 개를 겹쳐 적용할 수 있습니다.</dd></div>
+    <div><dt>Required check</dt><dd>병합 전에 반드시 성공해야 하는 CI 작업(status check).</dd></div>
+  </dl>
+</section>
+
+<h2>1. 계정, Organization, Team, 저장소 역할</h2>
+<h3>계정의 종류</h3>
+<table>
+  <thead><tr><th>종류</th><th>특징</th></tr></thead>
+  <tbody>
+    <tr><td>개인 계정 (personal)</td><td>한 사람. 저장소의 소유자이며 협업자(collaborator)를 초대해 쓰기 권한을 줄 수 있습니다. 세분화된 역할은 없습니다.</td></tr>
+    <tr><td>Organization</td><td>공동 소유. 사람은 개인 계정으로 로그인해 조직에 소속됩니다. Team 단위 권한, 조직 정책, SSO(Enterprise) 등을 관리합니다.</td></tr>
+    <tr><td>Enterprise 계정</td><td>여러 Organization을 묶어 정책·결제·감사를 통합 관리 (GitHub Enterprise 플랜).</td></tr>
+  </tbody>
+</table>
+
+<h3>Organization 안의 역할</h3>
+<ul>
+  <li><b>Owner</b> — 조직 전체 관리. 최소 2명을 두어 한 명이 자리를 비워도 잠기지 않게 하는 것이 권장됩니다.</li>
+  <li><b>Member</b> — 조직 구성원. 기본 저장소 권한(base permission)은 조직 설정으로 정합니다(없음/Read/Write/Admin).</li>
+  <li><b>Outside collaborator</b> — 조직 구성원이 아니지만 특정 저장소에만 초대된 외부인.</li>
+  <li>그 외 Billing manager, Security manager, Moderator 등 특수 역할이 있습니다.</li>
+</ul>
+<p><b>Team</b>은 사람을 묶는 단위로, 저장소 권한을 Team에 주면 관리가 쉬워지고 <code>@org/team</code> 멘션·리뷰 요청·CODEOWNERS에 쓸 수 있습니다. Team은 중첩(부모/자식)할 수 있습니다.</p>
+
+<h3>저장소 역할 (Organization 저장소)</h3>
+<table>
+  <thead><tr><th>역할</th><th>할 수 있는 일 (누적)</th><th>대상 예시</th></tr></thead>
+  <tbody>
+    <tr><td><b>Read</b></td><td>코드 보기·clone, 이슈·PR 작성과 댓글</td><td>다른 팀, 관찰자</td></tr>
+    <tr><td><b>Triage</b></td><td>+ 이슈·PR 라벨·담당자 지정, 닫기/다시 열기 (코드 쓰기 불가)</td><td>이슈 관리 담당</td></tr>
+    <tr><td><b>Write</b></td><td>+ 브랜치 push, PR 병합, 릴리스 관리</td><td>개발자</td></tr>
+    <tr><td><b>Maintain</b></td><td>+ 일부 저장소 설정(토픽, 기능 켜고 끄기 등). 민감한 설정·삭제는 불가</td><td>프로젝트 리드</td></tr>
+    <tr><td><b>Admin</b></td><td>+ 모든 설정, 보호 규칙, 접근 권한, 저장소 삭제·이전</td><td>저장소 관리자</td></tr>
+  </tbody>
+</table>
+<p>Enterprise Cloud에서는 이 역할들을 조합한 <b>사용자 지정 역할(custom repository roles)</b>도 만들 수 있습니다 <span class="term">플랜 의존</span>. 원칙은 언제나 <b>최소 권한</b>입니다.</p>
+
+<h2>2. 저장소 공개 범위</h2>
+<table>
+  <thead><tr><th>범위</th><th>누가 볼 수 있나</th><th>비고</th></tr></thead>
+  <tbody>
+    <tr><td><b>Public</b></td><td>인터넷의 누구나</td><td>많은 유료 기능이 공개 저장소에선 무료. 표준 GitHub-hosted runner도 무료</td></tr>
+    <tr><td><b>Private</b></td><td>명시적으로 접근 권한을 받은 사람</td><td>보호 기능 일부가 유료 플랜에서만 동작</td></tr>
+    <tr><td><b>Internal</b></td><td>같은 Enterprise의 모든 구성원</td><td><b>GitHub Enterprise 전용</b> <span class="term">플랜 의존</span>. 사내 "inner source"용</td></tr>
+  </tbody>
+</table>
+<div class="callout callout-danger">
+  <span class="callout-title">Private → Public 전환은 되돌리기 어렵다</span>
+  공개로 바꾸는 순간 <b>전체 커밋 이력</b>이 공개됩니다. 과거에 커밋했다 지운 비밀·개인정보도 이력에 남아 있으면 그대로 노출됩니다. 전환 전 secret scanning과 이력 점검을 하세요. 공개 저장소의 fork는 원본을 다시 private으로 바꿔도 남을 수 있습니다.
+</div>
+
+<h2>3. 인증: 비밀번호 대신 무엇을 쓰나</h2>
+<p>GitHub.com은 2021년부터 Git 작업에 계정 비밀번호를 받지 않습니다. 대신 아래 방법을 씁니다.</p>
+<h3>HTTPS + 토큰 / SSH 키 / gh</h3>
+<table>
+  <thead><tr><th>방식</th><th>원격 주소</th><th>장점</th><th>주의</th></tr></thead>
+  <tbody>
+    <tr><td>HTTPS + credential helper</td><td><code>https://github.com/you/repo.git</code></td><td>방화벽 친화적. Git Credential Manager·<code>gh</code>가 브라우저 로그인으로 토큰을 관리</td><td>토큰을 직접 URL에 넣지 말 것</td></tr>
+    <tr><td>SSH 키</td><td><code>git@github.com:you/repo.git</code></td><td>한 번 등록하면 편리, 커밋 서명 키로도 재사용 가능</td><td>개인키 유출 시 즉시 GitHub에서 삭제</td></tr>
+    <tr><td><code>gh auth login</code></td><td>둘 다 가능</td><td>CLI·Git 인증을 한 번에 설정</td><td>토큰 범위(scope)를 필요한 만큼만</td></tr>
+  </tbody>
+</table>
+<pre data-lang="bash"># SSH 키 만들기 (ed25519 권장)
+ssh-keygen -t ed25519 -C "you@example.com"
+# 공개키(~/.ssh/id_ed25519.pub)를 Settings → SSH and GPG keys 에 등록
+ssh -T git@github.com            # "Hi you! You've successfully authenticated..."
+
+# gh CLI로 로그인하고 Git의 HTTPS 인증까지 맡기기
+gh auth login                    # GitHub.com → HTTPS → 브라우저 로그인
+gh auth setup-git
+gh auth status                   # 로그인 계정과 토큰 범위 확인</pre>
+
+<h3>PAT: classic vs fine-grained</h3>
+<table>
+  <thead><tr><th></th><th>classic</th><th>fine-grained</th></tr></thead>
+  <tbody>
+    <tr><td>범위</td><td>계정이 접근 가능한 <b>모든</b> 저장소에 scope 단위(<code>repo</code>, <code>workflow</code> 등)로 적용</td><td><b>한 소유자(사용자 또는 조직)</b>의 리소스로 한정, 그중 <b>특정 저장소만</b> 선택 가능</td></tr>
+    <tr><td>권한</td><td>굵은 scope (<code>repo</code> = 모든 private 저장소 읽기/쓰기)</td><td>항목별 읽기/쓰기 (Contents, Issues, Pull requests, Actions…)</td></tr>
+    <tr><td>조직 통제</td><td>조직이 classic PAT 접근을 막을 수 있음</td><td>조직 소유자가 <b>승인 필수</b>로 설정 가능</td></tr>
+    <tr><td>만료</td><td>설정 가능(만료 없음도 가능하나 비권장)</td><td>만료일 필수(조직 정책으로 최대 기간 제한 가능)</td></tr>
+  </tbody>
+</table>
+<p>
+  <b>가능하면 fine-grained를 쓰세요.</b> 다만 공식 문서 기준으로 fine-grained PAT는 아직 일부 시나리오를 지원하지 않습니다:
+  내가 멤버가 아닌 공개 저장소·외부 협업자로 초대된 저장소에 기여하기, 여러 조직에 한 토큰으로 접근, Packages 접근, Checks API 호출, 사용자 소유 Projects 접근 등.
+  이 목록은 계속 줄어들고 있으니 <a href="https://docs.github.com/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens" target="_blank" rel="noopener">공식 문서</a>를 확인하세요.
+</p>
+
+<h3>2FA와 패스키</h3>
+<p>
+  GitHub는 2023년부터 코드를 기여하는 사용자에게 <b>2단계 인증(2FA) 의무화</b>를 단계적으로 적용했습니다. TOTP 앱, 보안 키(WebAuthn), 패스키, GitHub Mobile을 쓸 수 있고, SMS는 가장 약한 수단입니다.
+  <b>복구 코드</b>는 반드시 오프라인에 보관하세요. 조직은 "구성원 2FA 필수" 정책을 걸 수 있습니다.
+</p>
+
+<h3>GitHub App vs OAuth App (그리고 GITHUB_TOKEN)</h3>
+<table>
+  <thead><tr><th></th><th>GitHub App</th><th>OAuth App</th></tr></thead>
+  <tbody>
+    <tr><td>누구로 동작</td><td>앱 자신(봇) 또는 사용자를 대신해서</td><td>항상 사용자를 대신해서</td></tr>
+    <tr><td>권한</td><td>세분화된 권한 + <b>설치한 저장소에만</b></td><td>scope 단위, 사용자가 접근 가능한 전체</td></tr>
+    <tr><td>토큰 수명</td><td>설치 토큰(installation access token)은 <b>1시간 후 만료</b></td><td>사용자가 취소할 때까지 유효한 경우가 많음</td></tr>
+    <tr><td>추천</td><td>새 통합·자동화의 기본 선택</td><td>"GitHub로 로그인" 같은 단순 사용자 인증</td></tr>
+  </tbody>
+</table>
+<p>
+  GitHub Actions의 <code>GITHUB_TOKEN</code>도 사실 GitHub App(GitHub Actions 앱)의 설치 토큰입니다. 해당 저장소에만 유효하고 job이 끝나면 만료됩니다.
+  워크플로우에 <code>permissions:</code>로 필요한 권한만 명시하는 것이 좋습니다(예: PART 2의 <code>contents: write</code>, <code>issues: write</code>).
+  봇이 장기 PAT를 쓰는 대신 조직용 GitHub App을 만들어 <code>actions/create-github-app-token</code>으로 짧은 토큰을 발급받는 방식이 안전합니다.
+</p>
+
+<h2>4. Fork와 upstream 동기화</h2>
+<p>
+  <b>fork</b>는 남의 저장소를 내 계정으로 복사한 서버 측 사본입니다. 쓰기 권한이 없는 오픈소스에 기여할 때 쓰며,
+  내 fork에 push한 뒤 원본(upstream)으로 PR을 보냅니다. 팀 내부 저장소라면 fork 대신 <b>같은 저장소의 브랜치</b>로 PR을 여는 편이 단순합니다.
+</p>
+<pre data-lang="bash">gh repo fork upstream-owner/project --clone   # fork + clone + upstream 원격 자동 설정
+cd project
+git remote -v                # origin = 내 fork, upstream = 원본
+
+# 원본의 최신 변경 반영
+git fetch upstream
+git switch main
+git merge --ff-only upstream/main
+git push origin main
+
+# 또는 서버 측에서 바로 (웹의 "Sync fork" 버튼과 동일)
+gh repo sync you/project --source upstream-owner/project</pre>
+<div class="callout callout-tip">fork의 <code>main</code>에서 직접 작업하지 마세요. 항상 기능 브랜치를 만들어 PR을 보내면 upstream 동기화가 fast-forward로 깔끔하게 유지됩니다.</div>
+
+<h2>5. Pull Request 워크플로우 깊이 보기</h2>
+<h3>PR 생명주기</h3>
+<ol class="steps">
+  <li><strong>Draft PR로 일찍 열기</strong> 작업 중임을 알리고 CI를 미리 돌립니다. draft는 병합할 수 없고 CODEOWNERS 리뷰 요청도 자동으로 가지 않습니다. 준비되면 "Ready for review". (private 저장소에서의 draft PR 지원은 <span class="term">플랜 의존</span>)</li>
+  <li><strong>설명 작성</strong> 무엇을·왜·어떻게 테스트했는지. <code>Closes #12</code>, <code>Fixes #12</code> 같은 키워드를 쓰면 기본 브랜치에 병합될 때 이슈가 자동으로 닫힙니다.</li>
+  <li><strong>리뷰</strong> 리뷰어는 Comment / Approve / Request changes 중 하나로 제출합니다. Request changes는 보호 규칙에 따라 병합을 막습니다.</li>
+  <li><strong>수정 반영</strong> 같은 브랜치에 커밋을 push하면 PR이 갱신됩니다. 대화(conversation)는 해결(resolve) 처리합니다.</li>
+  <li><strong>병합</strong> 필요한 승인과 required check가 모두 충족되면 병합 방식 중 하나로 병합하고, 브랜치를 삭제합니다.</li>
+</ol>
+
+<h3>제안된 변경 (suggested changes)</h3>
+<p>리뷰 댓글에 아래처럼 쓰면 작성자가 버튼 한 번으로 그 수정을 커밋할 수 있습니다. 여러 제안을 모아 한 커밋으로 적용(batch)할 수도 있습니다.</p>
+<pre data-lang="markdown">```suggestion
+const total = rows.reduce((sum, r) =&gt; sum + r.amount, 0);
+```</pre>
+
+<h3>병합 방식 3가지와 이력에 미치는 영향</h3>
+<table>
+  <thead><tr><th>방식</th><th>결과 이력</th><th>장점</th><th>단점</th></tr></thead>
+  <tbody>
+    <tr><td><b>Create a merge commit</b></td><td>PR의 커밋 전부 + 병합 커밋(부모 2개)</td><td>실제 작업 흐름 보존, PR 단위로 <code>revert -m 1</code> 가능</td><td>이력이 그물처럼 복잡해짐</td></tr>
+    <tr><td><b>Squash and merge</b></td><td>PR 전체가 <b>커밋 1개</b>로 합쳐져 main에 추가</td><td>main 이력이 "PR 1개 = 커밋 1개"로 깔끔</td><td>PR 내부의 세부 커밋은 main에 남지 않음. 병합 후 같은 브랜치에서 계속 작업하면 충돌이 생기기 쉬움</td></tr>
+    <tr><td><b>Rebase and merge</b></td><td>PR 커밋들을 main 끝에 <b>새 해시로</b> 재적용, 병합 커밋 없음</td><td>일직선 이력 + 개별 커밋 보존</td><td>커밋 해시가 바뀜. 각 커밋이 독립적으로 의미 있어야 함</td></tr>
+  </tbody>
+</table>
+<p>저장소 설정(Settings → General → Pull Requests)에서 허용할 방식을 고를 수 있습니다. 팀이 일관되게 하나만 쓰는 것이 좋으며, 소규모 팀에는 보통 <b>squash</b>가 무난합니다.</p>
+
+<h3>auto-merge와 merge queue</h3>
+<ul>
+  <li><b>auto-merge</b> — "조건이 충족되면 자동으로 병합"을 예약합니다. 필요한 승인과 required check가 정의된 보호 규칙이 있어야 의미가 있습니다. 공개 저장소(Free)와 Pro·Team·Enterprise의 private 저장소에서 사용 가능 <span class="term">플랜 의존</span>.</li>
+  <li><b>merge queue</b> — 동시에 여러 PR이 병합될 때 "각자는 통과했지만 합치면 깨지는" 문제를 막습니다. 큐에 들어온 PR들을 <b>앞선 PR들과 합친 상태</b>로 다시 CI를 돌린 뒤 순서대로 병합합니다.
+    공식 문서 기준 <b>조직 소유 공개 저장소</b>, 또는 <b>GitHub Enterprise Cloud 조직의 private 저장소</b>에서 사용 가능합니다 <span class="term">플랜 의존</span>.
+    GitHub Actions 워크플로우는 <code>merge_group</code> 이벤트로 트리거되도록 추가해야 합니다.</li>
+</ul>
+<pre data-lang="yaml">on:
+  pull_request:
+  merge_group:        # merge queue가 만든 임시 브랜치(gh-readonly-queue/...)에서도 CI 실행</pre>
+
+<h2>6. 브랜치 보호 규칙과 Rulesets</h2>
+<p>"main에는 리뷰와 CI를 통과한 PR로만 들어온다"를 사람의 약속이 아니라 <b>시스템이 강제</b>하게 만드는 기능입니다.</p>
+<h3>자주 쓰는 규칙</h3>
+<table>
+  <thead><tr><th>규칙</th><th>효과</th></tr></thead>
+  <tbody>
+    <tr><td>Require a pull request before merging</td><td>직접 push 금지, PR 경유 필수. 필요 승인 수 지정</td></tr>
+    <tr><td>Dismiss stale approvals</td><td>승인 후 새 커밋이 push되면 기존 승인 무효화</td></tr>
+    <tr><td>Require review from Code Owners</td><td>변경된 경로의 CODEOWNERS 승인 필수</td></tr>
+    <tr><td>Require status checks to pass</td><td>지정한 CI job 성공 필수. "Require branches to be up to date"로 최신 base 기준 통과도 강제 가능</td></tr>
+    <tr><td>Require conversation resolution</td><td>미해결 리뷰 대화가 있으면 병합 불가</td></tr>
+    <tr><td>Require signed commits</td><td>서명·검증된 커밋만 허용</td></tr>
+    <tr><td>Require linear history</td><td>병합 커밋 금지 (squash/rebase만)</td></tr>
+    <tr><td>Block force pushes / deletions</td><td>강제 push·브랜치 삭제 금지</td></tr>
+  </tbody>
+</table>
+
+<h3>Branch protection rules vs Rulesets</h3>
+<table>
+  <thead><tr><th></th><th>Branch protection rule (기존)</th><th>Ruleset (신규)</th></tr></thead>
+  <tbody>
+    <tr><td>적용 개수</td><td>한 브랜치에 <b>하나</b>만 적용</td><td>여러 ruleset이 <b>겹쳐서</b> 적용, 충돌하면 가장 엄격한 규칙이 이김</td></tr>
+    <tr><td>대상</td><td>브랜치</td><td>브랜치, 태그, push(파일 경로·확장자·크기 제한)</td></tr>
+    <tr><td>상태</td><td>켜짐/삭제</td><td>Active / Disabled 전환 (삭제 없이 끄기). Enterprise에서는 평가 모드도 제공</td></tr>
+    <tr><td>예외(bypass)</td><td>관리자 포함 여부 정도</td><td>역할·팀·GitHub App 단위로 bypass 목록 지정</td></tr>
+    <tr><td>가시성</td><td>관리자만 설정 확인</td><td>Read 권한자도 활성 규칙 확인 가능</td></tr>
+    <tr><td>조직 단위</td><td>불가</td><td>Enterprise 플랜에서 조직 전체 저장소에 일괄 적용 가능</td></tr>
+  </tbody>
+</table>
+<div class="callout callout-warn">
+  <span class="callout-title">플랜 의존: 보호 기능의 사용 가능 범위</span>
+  공식 문서 기준, <b>protected branches·rulesets·CODEOWNERS·auto-merge·Wiki</b>는 GitHub Free/Free for organizations에서는 <b>공개 저장소에서만</b>,
+  GitHub Pro·Team·Enterprise Cloud에서는 공개·private 저장소 모두에서 사용할 수 있습니다. 즉 <b>무료 플랜의 private 저장소에서는 main 보호를 걸 수 없습니다.</b>
+  파일 경로·크기 등을 제한하는 push rulesets는 Team 이상 플랜의 private·internal 저장소에서, 조직 전체에 거는 rulesets는 Enterprise 플랜에서 제공됩니다.
+  (<a href="https://docs.github.com/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets" target="_blank" rel="noopener">About rulesets</a>,
+  <a href="https://docs.github.com/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches" target="_blank" rel="noopener">About protected branches</a>)
+</div>
+
+<h2>7. CODEOWNERS</h2>
+<p>경로별 책임자를 정해 PR이 열리면 자동으로 리뷰를 요청합니다. 파일 위치는 <code>.github/CODEOWNERS</code>, 저장소 루트, <code>docs/</code> 중 하나이며, 병합 대상 브랜치에 있는 파일이 기준입니다.</p>
+<pre data-lang="bash"># .github/CODEOWNERS
+# 문법은 .gitignore 와 비슷. 아래쪽(나중에 나온) 규칙이 우선한다.
+*                       @your-org/maintainers
+/converter/             @your-org/data-team
+/.github/workflows/     @your-org/devops
+*.md                    @you</pre>
+<div class="callout callout-tip">
+  CODEOWNERS 자체(<code>.github/CODEOWNERS</code>)와 <code>.github/workflows/</code>에도 소유자를 지정하세요. 워크플로우 파일은 저장소 비밀에 접근하는 코드이므로 리뷰 없이 바뀌면 위험합니다.
+  "Require review from Code Owners" 규칙과 함께 써야 실제 강제력이 생깁니다.
+</div>
+
+<h2>8. 이슈 관리: 템플릿, 폼, 라벨, 마일스톤, Projects, Discussions</h2>
+<h3>Issue forms</h3>
+<p>PART 2에서 엑셀 업로드 이슈를 받았던 것처럼, 이슈 입력을 <b>구조화된 폼</b>으로 받으면 자동화가 쉬워집니다. <code>.github/ISSUE_TEMPLATE/*.yml</code>에 둡니다.</p>
+<pre data-lang="yaml"># .github/ISSUE_TEMPLATE/upload.yml
+name: 엑셀 업로드
+description: 대시보드에 반영할 엑셀 파일을 올립니다
+title: "[업로드] "
+labels: ["upload"]
+body:
+  - type: input
+    id: period
+    attributes:
+      label: 기준 월
+      placeholder: 2026-11
+    validations:
+      required: true
+  - type: textarea
+    id: file
+    attributes:
+      label: 엑셀 파일
+      description: 여기에 .xlsx 파일을 끌어다 놓으세요
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 확인
+      options:
+        - label: 개인정보가 포함되어 있지 않습니다
+          required: true</pre>
+<pre data-lang="yaml"># .github/ISSUE_TEMPLATE/config.yml — 빈 이슈 막고 외부 링크 안내
+blank_issues_enabled: false
+contact_links:
+  - name: 보안 취약점 제보
+    url: https://github.com/you/repo/security/advisories/new
+    about: 공개 이슈가 아닌 비공개 경로로 제보해 주세요</pre>
+<p>PR 템플릿은 <code>.github/pull_request_template.md</code>에 두면 PR 본문에 자동으로 채워집니다.</p>
+
+<h3>정리 도구들</h3>
+<table>
+  <thead><tr><th>기능</th><th>용도</th></tr></thead>
+  <tbody>
+    <tr><td><b>Labels</b></td><td>분류(<code>bug</code>, <code>upload</code>, <code>good first issue</code>). 워크플로우의 트리거 조건으로도 활용</td></tr>
+    <tr><td><b>Milestones</b></td><td>마감일이 있는 묶음(예: v1.2 릴리스). 진행률 표시</td></tr>
+    <tr><td><b>Assignees</b></td><td>담당자</td></tr>
+    <tr><td><b>Sub-issues / issue types</b></td><td>큰 작업을 하위 이슈로 분해, 조직 차원의 이슈 유형 지정 (기능 제공 범위는 수시로 바뀜)</td></tr>
+    <tr><td><b>Projects</b></td><td>이슈·PR을 테이블·보드·로드맵 뷰로 관리하는 스프레드시트형 도구. 사용자 정의 필드(우선순위, 스프린트), 자동화 워크플로우 지원. 옛 "Projects (classic)"는 단종</td></tr>
+    <tr><td><b>Discussions</b></td><td>할 일이 아닌 질문·아이디어·공지를 위한 포럼. 답변 채택 기능. "이슈는 할 일, 토론은 대화"로 구분</td></tr>
+  </tbody>
+</table>
+
+<h2>9. Releases와 태그</h2>
+<p>Release는 Git 태그에 <b>릴리스 노트와 첨부 파일(바이너리)</b>을 얹은 GitHub 기능입니다. 태그가 없으면 Release를 만들 때 함께 생성됩니다.</p>
+<pre data-lang="bash">gh release create v1.2.0 --generate-notes            # 이전 태그 이후 병합된 PR로 노트 자동 생성
+gh release create v1.3.0-rc.1 --prerelease --notes "테스트용"
+gh release create v1.2.0 ./dist/app.zip --title "v1.2.0" --notes-file CHANGELOG.md
+gh release list
+gh release download v1.2.0 -p "*.zip"</pre>
+<pre data-lang="yaml"># .github/release.yml — 자동 생성 노트의 분류 규칙
+changelog:
+  exclude:
+    labels: [skip-changelog]
+  categories:
+    - title: 새 기능
+      labels: [feature]
+    - title: 버그 수정
+      labels: [bug]
+    - title: 기타
+      labels: ["*"]</pre>
+<div class="callout callout-warn">이미 공개한 버전의 태그를 다른 커밋으로 옮기지 마세요. 사용자·캐시·패키지 관리자가 같은 이름의 다른 내용을 받게 됩니다. 문제가 있으면 새 PATCH 버전을 내는 것이 원칙입니다.</div>
+
+<h2>10. 저장소의 "얼굴": README, LICENSE, CONTRIBUTING, SECURITY.md</h2>
+<table>
+  <thead><tr><th>파일</th><th>역할</th></tr></thead>
+  <tbody>
+    <tr><td><code>README.md</code></td><td>무엇이고, 어떻게 설치·실행하고, 어디서 도움을 받는지. 저장소 첫 화면에 표시</td></tr>
+    <tr><td><code>LICENSE</code></td><td><b>라이선스가 없으면 공개 저장소라도 기본적으로 "모든 권리 보유"</b> — 남이 합법적으로 쓸 수 없습니다. MIT·Apache-2.0 등 선택</td></tr>
+    <tr><td><code>CONTRIBUTING.md</code></td><td>기여 절차, 브랜치·커밋 규칙, 로컬 테스트 방법. 이슈·PR 작성 화면에 링크됨</td></tr>
+    <tr><td><code>CODE_OF_CONDUCT.md</code></td><td>커뮤니티 행동 강령</td></tr>
+    <tr><td><code>SECURITY.md</code></td><td>취약점을 <b>공개 이슈가 아닌</b> 어떤 경로로 제보하는지, 지원 버전</td></tr>
+    <tr><td><code>SUPPORT.md</code>, <code>FUNDING.yml</code></td><td>지원 채널, 후원 버튼</td></tr>
+    <tr><td>Wiki</td><td>저장소와 별도의 Git 저장소(<code>repo.wiki.git</code>)로 관리되는 문서. 코드와 함께 리뷰하고 싶다면 <code>docs/</code> 폴더가 더 낫습니다 (private 저장소의 Wiki는 <span class="term">플랜 의존</span>)</td></tr>
+  </tbody>
+</table>
+<p>조직의 <code>.github</code>라는 이름의 공개 저장소에 이 파일들을 두면 해당 파일이 없는 조직 저장소 전체의 <b>기본값</b>으로 쓰입니다. <code>you/you</code>처럼 사용자 이름과 같은 저장소의 README는 프로필 페이지에 표시됩니다.</p>
+
+<h2>11. 보안 기능</h2>
+<table>
+  <thead><tr><th>기능</th><th>하는 일</th><th>사용 범위</th></tr></thead>
+  <tbody>
+    <tr><td><b>Dependency graph</b></td><td>manifest·lockfile을 분석해 의존성 목록 생성</td><td>공개 저장소 기본 활성</td></tr>
+    <tr><td><b>Dependabot alerts</b></td><td>사용 중인 의존성에 알려진 취약점(GitHub Advisory Database)이 있으면 알림</td><td>개인·조직 소유 저장소 모두</td></tr>
+    <tr><td><b>Dependabot security updates</b></td><td>취약 의존성을 고친 버전으로 올리는 PR 자동 생성</td><td>alerts와 함께 설정</td></tr>
+    <tr><td><b>Dependabot version updates</b></td><td><code>.github/dependabot.yml</code> 일정에 따라 의존성 최신화 PR 생성 (Actions 버전 포함)</td><td>설정 파일로 활성화</td></tr>
+    <tr><td><b>Secret scanning</b></td><td>커밋·이슈 등에서 토큰·키 패턴 탐지, 일부 제공자에게 자동 통보</td><td>공개 저장소 무료. private은 <b>GitHub Secret Protection</b> 구매 필요 <span class="term">플랜 의존</span></td></tr>
+    <tr><td><b>Push protection</b></td><td>비밀이 포함된 push를 <b>사전에 차단</b></td><td>개인 계정 단위 push protection은 기본 활성(공개 저장소로의 push 대상). 저장소 단위는 Secret Protection 필요</td></tr>
+    <tr><td><b>Code scanning (CodeQL)</b></td><td>코드의 취약 패턴(SQL injection, XSS 등) 정적 분석, PR에 결과 표시</td><td>공개 저장소 무료. 조직 private 저장소는 Team/Enterprise + <b>GitHub Code Security</b> <span class="term">플랜 의존</span></td></tr>
+    <tr><td><b>Private vulnerability reporting / Security advisories</b></td><td>외부인이 비공개로 취약점 제보, 관리자가 비공개 fork에서 수정 후 GHSA 공개·CVE 요청</td><td>공개 저장소</td></tr>
+  </tbody>
+</table>
+<pre data-lang="yaml"># .github/dependabot.yml — Actions 버전과 pip 의존성을 매주 점검
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: pip
+    directory: /converter
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]</pre>
+<div class="callout callout-danger">
+  <span class="callout-title">push protection이 막았다면</span>
+  "이건 테스트 키라서 괜찮다"며 우회(bypass)하기 전에, 정말 실제 키가 아닌지 확인하세요. 실제 키라면 커밋을 고쳐(<code>git commit --amend</code> 또는 <code>rebase -i</code>) 비밀을 제거하고, <b>이미 다른 곳에 노출됐을 가능성이 있다면 키를 폐기</b>하세요.
+  비밀은 코드가 아니라 <b>Actions Secrets</b>·환경 변수·비밀 관리 도구로 공급합니다.
+</div>
+<p>보안 기능의 제품 구성(GitHub Secret Protection, GitHub Code Security 등)과 가격은 자주 바뀝니다. <a href="https://docs.github.com/code-security" target="_blank" rel="noopener">GitHub 보안 문서</a>를 확인하세요.</p>
+
+<h2>12. gh CLI 파워 유저 가이드</h2>
+<h3>매일 쓰는 명령</h3>
+<pre data-lang="bash"># PR
+gh pr create --fill --draft              # 커밋 메시지로 제목·본문 채워 draft PR 생성
+gh pr create --base main --reviewer you --label feature
+gh pr list --author @me --state open
+gh pr checkout 42                        # 남의 PR(fork 포함)을 로컬 브랜치로
+gh pr diff 42
+gh pr review 42 --approve                # 또는 --request-changes -b "사유"
+gh pr merge 42 --squash --delete-branch
+gh pr merge 42 --auto --squash           # 조건 충족 시 자동 병합 예약
+gh pr checks 42 --watch                  # CI 진행 상황 실시간 확인
+
+# 이슈
+gh issue create --title "버그" --body "재현 방법..." --label bug
+gh issue list --label upload --state all --limit 20
+gh issue view 12 --comments
+
+# Actions
+gh run list --workflow convert.yml --limit 5
+gh run watch                             # 진행 중인 실행을 골라 실시간 추적
+gh run view --log-failed                 # 실패한 step의 로그만
+gh run rerun 123456789 --failed          # 실패한 job만 재실행
+gh workflow run convert.yml -f sheet=2026-11   # workflow_dispatch 수동 실행
+gh secret set API_KEY &lt; ./key.txt        # 값을 명령 인자가 아니라 표준 입력으로 (셸 기록에 안 남게)
+
+# 저장소
+gh repo clone you/repo
+gh repo view --web
+gh browse src/app.js:42                  # 브라우저에서 해당 파일·줄 열기</pre>
+
+<h3><code>gh api</code>: REST·GraphQL 직접 호출</h3>
+<p><code>gh</code>가 인증을 처리해 주므로 토큰을 다루지 않고 API를 바로 호출할 수 있습니다. <code>{owner}</code>, <code>{repo}</code>는 현재 디렉터리의 저장소로 자동 치환됩니다.</p>
+<pre data-lang="bash"># 저장소 정보에서 필요한 필드만 (--jq 는 jq 문법)
+gh api repos/{owner}/{repo} --jq '{name, visibility, default_branch}'
+
+# 페이지네이션 자동 처리: 모든 이슈 제목
+gh api --paginate 'repos/{owner}/{repo}/issues?state=all&amp;per_page=100' --jq '.[].title'
+
+# POST: 이슈에 라벨 추가 (-f 문자열, -F 타입 추론)
+gh api -X POST repos/{owner}/{repo}/issues/12/labels -f 'labels[]=processed'
+
+# 활성 rulesets 확인
+gh api repos/{owner}/{repo}/rulesets --jq '.[] | {name, enforcement}'
+
+# GraphQL
+gh api graphql -f query='
+  query { viewer { login repositories(first: 5, orderBy:{field:UPDATED_AT, direction:DESC}) { nodes { name } } } }'
+
+# 남은 API 호출 한도
+gh api rate_limit --jq '.resources.core'</pre>
+
+<h3>별칭과 확장</h3>
+<pre data-lang="bash">gh alias set prs 'pr list --author @me'
+gh alias set co 'pr checkout'
+gh extension list
+gh extension install owner/gh-something   # 확장은 제3자 코드이므로 출처를 확인하고 설치</pre>
+
+<h2>13. Codespaces</h2>
+<p>
+  브라우저(또는 VS Code)에서 바로 쓰는 <b>클라우드 개발 환경</b>입니다. 저장소의 <code>.devcontainer/devcontainer.json</code>으로 언어 런타임·확장·포트 포워딩을 정의해 두면
+  누구든 같은 환경을 몇 분 안에 띄울 수 있어 교육·온보딩에 특히 유용합니다.
+</p>
+<pre data-lang="json">{
+  "name": "dashboard",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "features": { "ghcr.io/devcontainers/features/node:1": {} },
+  "postCreateCommand": "pip install -r converter/requirements.txt",
+  "forwardPorts": [8000],
+  "customizations": { "vscode": { "extensions": ["ms-python.python"] } }
+}</pre>
+<div class="callout callout-warn">
+  <span class="callout-title">플랜 의존: 무료 사용량</span>
+  개인 계정에는 월 무료 사용량이 있습니다(공식 플랜 문서 기준 Free: 120 core-hours·15GB 저장, Pro: 180 core-hours·20GB). core-hour는 "코어 수 × 시간"이라 4코어 머신을 1시간 쓰면 4 core-hours가 차감됩니다.
+  <b>멈춘 codespace도 저장 용량은 계속 차감</b>되니 안 쓰는 것은 삭제하세요. 조직 저장소의 codespace는 조직 결제 설정을 따릅니다.
+  (<a href="https://docs.github.com/billing/managing-billing-for-your-products/managing-billing-for-github-codespaces/about-billing-for-github-codespaces" target="_blank" rel="noopener">Codespaces 과금</a>)
+</div>
+
+<h2>14. GitHub Packages와 Container registry</h2>
+<p>
+  npm, Maven, NuGet, RubyGems, 컨테이너 이미지 등을 GitHub에 게시하는 패키지 저장소입니다. 컨테이너 이미지는 <code>ghcr.io/소유자/이미지</code> 주소를 씁니다.
+  Actions에서는 <code>GITHUB_TOKEN</code>에 <code>packages: write</code> 권한만 주면 별도 토큰 없이 게시할 수 있습니다.
+</p>
+<pre data-lang="yaml">permissions:
+  contents: read
+  packages: write
+steps:
+  - uses: actions/checkout@v4
+  - uses: docker/login-action@v3
+    with:
+      registry: ghcr.io
+      username: ${{ github.actor }}
+      password: ${{ secrets.GITHUB_TOKEN }}
+  - uses: docker/build-push-action@v6
+    with:
+      push: true
+      tags: ghcr.io/${{ github.repository }}:${{ github.sha }}</pre>
+<ul>
+  <li>패키지 공개 범위는 저장소와 별도로 설정할 수 있습니다. 공개 패키지는 무료이며, private 패키지 저장 용량은 플랜별로 다릅니다 <span class="term">플랜 의존</span>.</li>
+  <li>배포에는 <code>latest</code> 같은 변경 가능한 태그보다 <b>이미지 digest</b>(<code>@sha256:…</code>)로 고정하는 것이 재현성과 보안에 좋습니다.</li>
+  <li>공식 문서상 fine-grained PAT는 아직 Packages 접근을 지원하지 않으므로, 로컬에서 게시할 때는 <code>write:packages</code> scope의 classic PAT가 필요할 수 있습니다.</li>
+</ul>
+
+<h2>15. 플랜별 차이 요약 (이 강의와 관련된 기능 중심)</h2>
+<p>아래 표는 작성 시점의 <a href="https://docs.github.com/get-started/learning-about-github/githubs-plans" target="_blank" rel="noopener">GitHub 플랜 문서</a>와 각 기능 문서를 요약한 것입니다. <b>요금·포함 사용량·제공 범위는 자주 바뀌므로 반드시 원문을 확인하세요.</b></p>
+<table>
+  <thead><tr><th>기능</th><th>Free (개인/조직)</th><th>Pro (개인)</th><th>Team (조직)</th><th>Enterprise Cloud</th></tr></thead>
+  <tbody>
+    <tr><td>무제한 공개·private 저장소</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+    <tr><td>Protected branches, rulesets, CODEOWNERS, auto-merge, Wiki</td><td>공개 저장소만</td><td>공개·private</td><td>공개·private</td><td>공개·private</td></tr>
+    <tr><td>GitHub Pages</td><td>공개 저장소만</td><td>private 저장소에서도 게시 (사이트는 공개)</td><td>좌동</td><td>+ 접근 제어된 private Pages</td></tr>
+    <tr><td>Internal 저장소</td><td>—</td><td>—</td><td>—</td><td>✅</td></tr>
+    <tr><td>Merge queue</td><td colspan="3">조직 소유 <b>공개</b> 저장소</td><td>+ private 저장소</td></tr>
+    <tr><td>Secret scanning / Code scanning (private)</td><td colspan="2">공개 저장소에서 사용</td><td colspan="2">Secret Protection / Code Security 별도 구매</td></tr>
+    <tr><td>Actions (GitHub-hosted runner)</td><td colspan="4">공개 저장소의 표준 runner는 무료. private 저장소는 플랜별 포함 사용량 후 과금. <b>Windows·macOS runner는 Linux보다 단가가 높습니다</b> (PART 2의 <code>windows-latest</code> 참고)</td></tr>
+    <tr><td>Codespaces 무료 사용량</td><td>개인 Free: 120 core-h/15GB</td><td>180 core-h/20GB</td><td colspan="2">조직 결제 설정에 따름</td></tr>
+    <tr><td>Packages 저장 용량 (private)</td><td>500MB</td><td>2GB</td><td>2GB</td><td>50GB</td></tr>
+  </tbody>
+</table>
+
+<div class="quiz" data-answer="a">
+  <p class="quiz-q">회사 동료 3명이 GitHub Free 조직의 <b>private</b> 저장소를 씁니다. "main에는 리뷰 승인 + CI 통과한 PR만 병합"을 강제하고 싶습니다. 어떻게 해야 할까요?</p>
+  <div class="quiz-options">
+    <button type="button" data-opt="a">조직을 Team 이상 플랜으로 올리고 ruleset(또는 branch protection)을 설정한다</button>
+    <button type="button" data-opt="b">Free 플랜에서도 ruleset을 설정하면 바로 적용된다</button>
+    <button type="button" data-opt="c">CODEOWNERS 파일만 추가하면 강제된다</button>
+  </div>
+  <p class="quiz-explain">정답! 공식 문서 기준 Free 플랜의 보호 규칙·rulesets는 공개 저장소에서만 동작합니다. CODEOWNERS는 리뷰 "요청"만 자동화할 뿐, 강제하려면 보호 규칙의 "Require review from Code Owners"가 필요합니다. 공개 저장소로 운영해도 된다면 Free에서도 가능합니다.</p>
+</div>
+
+<div class="quiz" data-answer="c">
+  <p class="quiz-q">PR 10개를 하루에 병합하는 저장소에서 "Squash and merge"를 쓰면 main 이력은 어떻게 될까요?</p>
+  <div class="quiz-options">
+    <button type="button" data-opt="a">PR의 모든 커밋과 병합 커밋 10개가 추가된다</button>
+    <button type="button" data-opt="b">PR의 커밋들이 원래 해시 그대로 일직선으로 추가된다</button>
+    <button type="button" data-opt="c">PR마다 새 커밋 1개씩, 총 10개가 일직선으로 추가된다</button>
+  </div>
+  <p class="quiz-explain">정답! squash는 PR의 변경 전체를 하나의 새 커밋으로 만들어 main에 붙입니다. (a)는 merge commit 방식, (b)는 rebase 방식과 비슷하지만 rebase and merge도 해시는 새로 만들어집니다.</p>
+</div>
+
+<h2>더 읽을거리</h2>
+<ul>
+  <li><a href="https://docs.github.com/" target="_blank" rel="noopener">GitHub Docs</a> — 기능별 "Who can use this feature?" 상자에서 플랜·공개 범위 조건을 확인하세요</li>
+  <li><a href="https://cli.github.com/manual/" target="_blank" rel="noopener">GitHub CLI 매뉴얼</a></li>
+  <li><a href="https://docs.github.com/rest" target="_blank" rel="noopener">REST API 문서</a>, <a href="https://docs.github.com/graphql" target="_blank" rel="noopener">GraphQL API 문서</a></li>
+  <li><a href="https://github.blog/changelog/" target="_blank" rel="noopener">GitHub Changelog</a> — 기능 변경·지원 종료 소식</li>
+</ul>

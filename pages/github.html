@@ -1,6 +1,74 @@
 <h1>Step 1 · GitHub 저장소와 Claude Code</h1>
 <p class="lede">GitHub의 핵심 개념을 훑어보고, 실습용 저장소를 만든 뒤 Claude Code를 연결합니다.</p>
 
+<section class="theory">
+  <h2>📚 시작 전 이론: Git·GitHub·인증·Claude Code</h2>
+  <p>
+    이 Step에서는 진짜 GitHub에 저장소를 만들고, 내 컴퓨터와 연결하고, AI 코딩 도구를 붙입니다.
+    명령을 따라 치기 전에 "내 컴퓨터와 GitHub이 어떤 관계인지"와 "GitHub이 나를 어떻게 알아보는지"를 먼저 정리해 둡시다.
+  </p>
+  <dl class="theory-terms">
+    <div><dt>Git</dt><dd>내 컴퓨터에서 돌아가는 <b>버전 관리 프로그램</b>. 인터넷 없이도 커밋·브랜치가 다 됩니다.</dd></div>
+    <div><dt>GitHub</dt><dd>Git 저장소를 인터넷에 보관해 주는 <b>서비스(웹사이트)</b>. 여기에 Issues·PR·Actions·Pages 같은 협업 기능이 얹혀 있어요.</dd></div>
+    <div><dt>저장소 (repository)</dt><dd>프로젝트 파일 + 전체 커밋 기록이 담긴 단위. 내 컴퓨터에 하나(로컬), GitHub에 하나(원격)가 있습니다.</dd></div>
+    <div><dt>원격 (remote) · origin</dt><dd>로컬 저장소가 기억하는 "상대 저장소 주소"의 별명. clone하면 원본 주소가 자동으로 <code>origin</code>이라는 이름으로 등록돼요.</dd></div>
+    <div><dt>gh</dt><dd>GitHub 공식 명령줄 도구. 저장소 생성·이슈·PR·Actions 로그 보기를 터미널에서 할 수 있어요. (<code>git</code>과는 다른 프로그램!)</dd></div>
+    <div><dt>CLAUDE.md</dt><dd>Claude Code가 세션을 시작할 때 자동으로 읽는 프로젝트 설명서. 매번 반복할 설명·규칙을 여기에 적어 둡니다.</dd></div>
+  </dl>
+
+  <h3>Git과 GitHub은 다른 것</h3>
+  <p>
+    <code>git commit</code>은 <b>내 컴퓨터 안</b>에서만 일어납니다. GitHub에는 <code>git push</code>를 해야 비로소 올라가요.
+    반대로 GitHub 웹에서 생긴 변화(다른 사람의 커밋, 봇의 커밋)는 <code>git pull</code>/<code>git fetch</code>를 해야 내 컴퓨터에 내려옵니다.
+    Step 5에서 봇이 만든 <code>docs</code> 브랜치를 <code>git fetch</code>로 확인하는 것도 이 때문이에요.
+  </p>
+  <pre data-nocopy>내 컴퓨터 (로컬 저장소)                     GitHub (원격 저장소 = origin)
+ ┌──────────────────────┐   git push  →   ┌──────────────────────────────┐
+ │ 작업 폴더 + .git/     │                 │ github.com/&lt;아이디&gt;/excel-dashboard │
+ │ (커밋 기록)           │   ← git pull    │ + Issues · PR · Actions · Pages │
+ └──────────────────────┘   ← git clone   └──────────────────────────────┘</pre>
+
+  <h3>Public과 Private</h3>
+  <p>
+    <b>Public</b> 저장소는 전 세계 누구나 코드와 이슈(첨부 파일 포함)를 볼 수 있고, <b>Private</b>은 초대한 사람만 볼 수 있어요.
+    무료 계정에서 GitHub Pages를 쓰려면 저장소가 <b>Public</b>이어야 합니다(Private 저장소의 Pages는 유료 플랜 기능).
+    또 Public 저장소는 GitHub이 제공하는 표준 runner를 무료로 쓸 수 있고, Private 저장소는 계정별 무료 사용량(분) 한도가 있어요.
+    그래서 오늘 실습 저장소는 Public으로 만들고, <b>민감한 실제 데이터는 절대 올리지 않습니다.</b>
+  </p>
+
+  <h3>인증: GitHub은 내가 누군지 어떻게 알까?</h3>
+  <p>push는 "내 저장소에 쓰기"라서 GitHub이 본인 확인을 합니다. 2021년부터 Git 작업에 <b>계정 비밀번호는 쓸 수 없어요.</b> 대신 아래 중 하나를 씁니다.</p>
+  <table>
+    <thead><tr><th>방식</th><th>어떻게 동작하나</th><th>이번 실습에서</th></tr></thead>
+    <tbody>
+      <tr><td><code>gh auth login</code></td><td>브라우저로 로그인하면 gh가 토큰을 받아 보관하고, Git이 HTTPS로 push할 때도 그 토큰을 쓰도록 연결해 줌</td><td><b>추천.</b> 준비물 체크에서 이미 했어요</td></tr>
+      <tr><td>HTTPS + 개인 액세스 토큰(PAT)</td><td>GitHub 설정에서 만든 토큰을 비밀번호 칸에 입력. 권한·만료일을 정할 수 있음</td><td>gh를 못 쓸 때의 대안</td></tr>
+      <tr><td>SSH 키</td><td>내 컴퓨터의 개인 키 + GitHub에 등록한 공개 키로 확인. 주소가 <code>git@github.com:...</code> 형태</td><td>이미 SSH를 쓰고 있다면 그대로 OK</td></tr>
+    </tbody>
+  </table>
+  <p>
+    <code>git remote -v</code>로 보이는 주소가 <code>https://</code>인지 <code>git@</code>인지에 따라 어떤 인증을 쓰는지가 정해져요.
+    push가 <code>403</code>/<code>Permission denied</code>로 실패한다면 대부분 이 인증 문제입니다. <code>gh auth status</code>로 먼저 확인하세요.
+  </p>
+
+  <h3>Claude Code는 저장소를 어떻게 이해할까?</h3>
+  <ul>
+    <li><b>실행한 폴더가 작업 범위</b>예요. 그래서 반드시 저장소 폴더 안에서 <code>claude</code>를 실행합니다.</li>
+    <li>처음부터 모든 파일을 외우고 있지 않아요. 필요할 때 파일을 <b>찾아 읽고</b>, 명령(<code>git</code>, <code>python</code>, <code>gh</code>…)을 실행하고, 파일을 고칩니다. 명령 실행·파일 수정 전에는 허락을 물어봐요.</li>
+    <li>새 세션은 지난 대화를 기억하지 못합니다. 그래서 프로젝트 목표·폴더 구조·규칙을 <code>CLAUDE.md</code>에 적어 두면, 세션마다 그걸 먼저 읽고 일관되게 작업해요.</li>
+    <li>GitHub 웹의 상태(이슈, Actions 결과)는 저절로 알지 못합니다. <code>gh</code> 명령을 실행시켜 읽게 하거나, 로그를 붙여넣어 줘야 해요.</li>
+  </ul>
+
+  <div class="theory-check"><b>✅ 실습 전 셀프 체크</b>
+    <ul>
+      <li>"커밋했는데 GitHub에 안 보여요"라는 질문에 원인을 설명할 수 있나요?</li>
+      <li><code>origin</code>이 무엇이고 언제 자동으로 생기는지 말할 수 있나요?</li>
+      <li>push할 때 GitHub이 나를 확인하는 방법 두 가지 이상을 말할 수 있나요?</li>
+      <li><code>CLAUDE.md</code>를 먼저 만드는 이유를 설명할 수 있나요?</li>
+    </ul>
+  </div>
+</section>
+
 <h2>GitHub 한눈에 보기</h2>
 <p>GitHub는 Git 저장소를 인터넷에 올려두는 곳이자, 그 위에서 협업하기 위한 도구 모음입니다. 오늘 쓸 기능은 다섯 가지예요.</p>
 <div class="cards">
@@ -15,12 +83,6 @@
   <figcaption>저장소 상단 탭 — Code · Issues · Pull requests · Actions · Settings(→ Pages)</figcaption>
 </figure>
 
-<h3>Public과 Private</h3>
-<p>
-  <b>Public</b> 저장소는 전 세계 누구나 코드를 볼 수 있고, <b>Private</b>은 초대한 사람만 볼 수 있어요.
-  무료 계정에서 GitHub Pages를 쓰려면 저장소가 <b>Public</b>이어야 합니다. 그래서 오늘 실습 저장소는 Public으로 만들고,
-  <b>민감한 실제 데이터는 절대 올리지 않습니다.</b>
-</p>
 
 <h2>1-1. 저장소 만들기</h2>
 <div class="tabs">
@@ -47,7 +109,7 @@ cd excel-dashboard</pre>
 
 <div class="callout">
   <span class="callout-title">🔗 Git 실습실과 연결해 보세요</span>
-  방금 한 일은 실습실 미션 5의 <code>git clone</code>과 같아요. 원격(GitHub)에 저장소가 먼저 생기고, 그걸 내 컴퓨터로 복사했습니다.
+  방금 한 일은 실습실 미션 7(clone으로 팀 프로젝트 참여)의 <code>git clone</code>과 같아요. 원격(GitHub)에 저장소가 먼저 생기고, 그걸 내 컴퓨터로 복사했습니다.
   <code>git remote -v</code>를 쳐 보면 <code>origin</code>이 GitHub 주소로 이미 연결되어 있을 거예요.
 </div>
 

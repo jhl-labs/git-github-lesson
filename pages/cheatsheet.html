@@ -15,7 +15,8 @@
     <tr><td>브랜치</td><td><code>git branch</code> · <code>git switch -c 새브랜치</code> · <code>git switch main</code> · <code>git branch -d 브랜치</code></td></tr>
     <tr><td>병합</td><td><code>git merge 브랜치</code> · 충돌 시 파일 수정 → <code>git add</code> → <code>git commit</code> · 취소 <code>git merge --abort</code></td></tr>
     <tr><td>원격</td><td><code>git remote -v</code> · <code>git push -u origin main</code> · <code>git fetch</code> · <code>git pull</code></td></tr>
-    <tr><td>파일 수정 취소</td><td><code>git restore 파일</code></td></tr>
+    <tr><td>브랜치·과거 커밋 이동 (옛 방식)</td><td><code>git checkout 브랜치</code> · <code>git checkout -b 새브랜치</code> · <code>git checkout HEAD~1</code>(과거 구경, detached HEAD)</td></tr>
+    <tr><td>파일 수정 취소</td><td><code>git restore 파일</code> (= <code>git checkout -- 파일</code>)</td></tr>
     <tr><td>스테이징 취소</td><td><code>git restore --staged 파일</code></td></tr>
     <tr><td>마지막 커밋 취소 (push 전)</td><td><code>git reset --soft HEAD~1</code>(변경 유지) · <code>git reset --hard HEAD~1</code>(변경 삭제 ⚠️)</td></tr>
     <tr><td>push한 커밋 되돌리기</td><td><code>git revert 커밋</code> (되돌리는 새 커밋을 만듦 — 이력을 지우지 않아 안전)</td></tr>
@@ -45,7 +46,7 @@ gh secret set 이름                          # Actions Secret 등록</pre>
     <tr><td>Remote / origin</td><td>원격 저장소 / 그 기본 별명</td></tr>
     <tr><td>Pull Request</td><td>내 브랜치를 합쳐 달라는 GitHub의 요청·리뷰 공간</td></tr>
     <tr><td>Workflow / Job / Step</td><td>Actions 자동화 파일 / runner 한 대의 작업 묶음 / 개별 명령</td></tr>
-    <tr><td>Runner</td><td>워크플로우를 실행하는 가상 머신 (GitHub-hosted 또는 self-hosted)</td></tr>
+    <tr><td>Runner</td><td>워크플로우를 실제로 실행하는 머신. GitHub-hosted는 job마다 새로 만들어지는 클라우드 VM, self-hosted는 내가 준비한 서버</td></tr>
     <tr><td>Secret</td><td>워크플로우에서 쓰는 암호화된 비밀 값</td></tr>
     <tr><td>GitHub Pages</td><td>저장소 파일을 웹사이트로 공개하는 정적 호스팅</td></tr>
   </tbody>

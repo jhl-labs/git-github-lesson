@@ -1,0 +1,627 @@
+<h1>Git 깊이 알기</h1>
+<p class="lede">
+  <code>add</code>·<code>commit</code>·<code>push</code>만으로도 일은 됩니다. 그런데 "커밋이 사라졌어요", "rebase 하다 꼬였어요", "Windows에서만 diff가 전부 바뀌어요" 같은 순간이 오면
+  <strong>Git이 내부에서 무엇을 저장하고 어떻게 가리키는지</strong> 알아야 침착하게 해결할 수 있습니다.
+  이 장은 객체 모델에서 출발해 병합·되돌리기·협업 전략·복구 레시피까지 실무자의 시야로 정리합니다.
+</p>
+
+<div class="callout">
+  <span class="callout-title">(참고) 실습에 필요하지 않지만…</span>
+  PART 1·2를 진행하는 데 이 장은 필요하지 않습니다. 실습을 마친 뒤 "왜 이렇게 동작하지?"가 궁금할 때, 또는 실무에서 막혔을 때 찾아보는 <b>레퍼런스</b>로 쓰세요.
+  처음부터 끝까지 읽기보다 오른쪽 목차에서 필요한 절로 바로 이동하는 것을 권합니다.
+</div>
+
+<section class="theory">
+  <h2>핵심 용어 한눈에</h2>
+  <dl class="theory-terms">
+    <div><dt>객체(object)</dt><dd>Git 데이터베이스의 최소 단위. blob·tree·commit·tag 네 종류이며, 내용의 해시가 곧 이름입니다.</dd></div>
+    <div><dt>ref</dt><dd>커밋 해시에 붙인 사람이 읽을 수 있는 이름. 브랜치·태그·원격 추적 브랜치가 모두 ref입니다.</dd></div>
+    <div><dt>HEAD</dt><dd>"지금 내가 서 있는 곳". 보통 브랜치를 가리키고(symbolic ref), 브랜치가 커밋을 가리킵니다.</dd></div>
+    <div><dt>index</dt><dd>스테이징 영역의 실체인 <code>.git/index</code> 파일. 다음 커밋이 될 tree의 설계도입니다.</dd></div>
+    <div><dt>reachable</dt><dd>어떤 ref에서 부모를 따라가 닿을 수 있는 객체. 닿지 않는 객체는 결국 gc로 지워집니다.</dd></div>
+    <div><dt>merge base</dt><dd>두 브랜치의 가장 가까운 공통 조상. 3-way merge의 기준점입니다.</dd></div>
+  </dl>
+</section>
+
+<h2>1. 객체 모델: Git은 "내용 주소 파일시스템"이다</h2>
+<p>
+  Git의 저장소(<code>.git/objects</code>)는 거대한 <b>키-값 저장소</b>입니다. 값을 넣으면 그 내용의 해시가 키로 돌아오고(content-addressed),
+  같은 내용은 몇 번을 넣어도 같은 키 하나로 저장됩니다. 그래서 파일 1,000개 중 1개만 바꿔 커밋해도 나머지 999개는 새로 저장되지 않습니다.
+</p>
+<table>
+  <thead><tr><th>객체</th><th>담는 것</th><th>비유</th></tr></thead>
+  <tbody>
+    <tr><td><code>blob</code></td><td>파일 <b>내용</b>만. 파일 이름·권한은 없음</td><td>종이 한 장</td></tr>
+    <tr><td><code>tree</code></td><td>디렉터리 한 단계: (모드, 이름, blob/tree 해시) 목록</td><td>폴더의 목차</td></tr>
+    <tr><td><code>commit</code></td><td>최상위 tree 해시, 부모 커밋 해시(0~N개), author·committer, 메시지</td><td>목차에 붙인 날짜·서명·설명</td></tr>
+    <tr><td><code>tag</code> (annotated)</td><td>대상 객체 해시, 태그 이름, tagger, 메시지, (선택) 서명</td><td>특정 판본에 붙인 공식 라벨</td></tr>
+  </tbody>
+</table>
+
+<figure class="diagram">
+  <svg viewBox="0 0 680 250" role="img" aria-label="commit이 tree를 가리키고, tree가 blob과 하위 tree를 가리키며, 부모 commit을 가리키는 객체 그래프">
+    <defs>
+      <marker id="xg-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="var(--ink-2)" /></marker>
+    </defs>
+    <rect x="20" y="20" width="130" height="56" rx="10" fill="var(--c-repo-soft)" stroke="var(--c-repo)" stroke-width="2" />
+    <text x="85" y="44" text-anchor="middle" font-weight="800">commit</text><text x="85" y="63" text-anchor="middle" class="d-mono">9f3c1a2</text>
+    <rect x="20" y="160" width="130" height="56" rx="10" fill="var(--c-repo-soft)" stroke="var(--c-repo)" stroke-width="2" stroke-dasharray="5 4" />
+    <text x="85" y="184" text-anchor="middle" font-weight="800">부모 commit</text><text x="85" y="203" text-anchor="middle" class="d-mono">4b7e0d9</text>
+    <path d="M85 76 V156" stroke="var(--ink-2)" stroke-width="2" marker-end="url(#xg-arr)" />
+    <text x="95" y="122" class="d-sub">parent</text>
+
+    <rect x="240" y="20" width="130" height="56" rx="10" fill="var(--c-stage-soft)" stroke="var(--c-stage)" stroke-width="2" />
+    <text x="305" y="44" text-anchor="middle" font-weight="800">tree (/)</text><text x="305" y="63" text-anchor="middle" class="d-mono">d8a1e44</text>
+    <path d="M150 48 H236" stroke="var(--ink-2)" stroke-width="2" marker-end="url(#xg-arr)" />
+    <text x="193" y="40" text-anchor="middle" class="d-sub">tree</text>
+
+    <rect x="460" y="10" width="200" height="44" rx="10" fill="var(--c-work-soft)" stroke="var(--c-work)" stroke-width="2" />
+    <text x="560" y="37" text-anchor="middle" font-weight="700">blob · README.md</text>
+    <rect x="460" y="74" width="200" height="44" rx="10" fill="var(--c-stage-soft)" stroke="var(--c-stage)" stroke-width="2" />
+    <text x="560" y="101" text-anchor="middle" font-weight="700">tree · src/</text>
+    <rect x="460" y="150" width="200" height="44" rx="10" fill="var(--c-work-soft)" stroke="var(--c-work)" stroke-width="2" />
+    <text x="560" y="177" text-anchor="middle" font-weight="700">blob · src/app.js</text>
+    <path d="M370 40 H456" stroke="var(--ink-2)" stroke-width="2" marker-end="url(#xg-arr)" />
+    <path d="M370 62 Q420 70 456 92" fill="none" stroke="var(--ink-2)" stroke-width="2" marker-end="url(#xg-arr)" />
+    <path d="M560 118 V146" stroke="var(--ink-2)" stroke-width="2" marker-end="url(#xg-arr)" />
+    <text x="340" y="236" text-anchor="middle" class="d-sub">화살표는 모두 "해시로 가리킨다"는 뜻 — 내용이 하나라도 바뀌면 위쪽 해시가 연쇄적으로 바뀝니다</text>
+  </svg>
+</figure>
+
+<h3>직접 들여다보기: <code>git cat-file -p</code></h3>
+<p>아무 저장소에서나 따라 해 보세요. 출력 해시는 저장소마다 다릅니다.</p>
+<pre data-lang="bash"># 1) HEAD 커밋 객체를 그대로 출력
+git cat-file -p HEAD
+# tree d8a1e44...
+# parent 4b7e0d9...
+# author you &lt;you@example.com&gt; 1731200000 +0900
+# committer you &lt;you@example.com&gt; 1731200000 +0900
+#
+# 로그인 화면 추가
+
+# 2) 커밋이 가리키는 tree 보기 (HEAD^{tree} = HEAD 커밋의 tree)
+git cat-file -p 'HEAD^{tree}'
+# 100644 blob 3b18e51...    README.md
+# 040000 tree 91ac0f2...    src
+
+# 3) 객체 종류와 크기
+git cat-file -t HEAD          # commit
+git cat-file -s HEAD:README.md  # 바이트 수
+
+# 4) 내용을 직접 객체로 만들어 보기 (저장 없이 해시만 계산)
+echo 'hello' | git hash-object --stdin
+# ce013625030ba8dba906f756967f9e9ca394464a  ← 어느 컴퓨터에서나 같은 값</pre>
+<p>
+  해시는 <code>"blob 6\0hello\n"</code>처럼 <b>"종류 + 크기 + 널 문자 + 내용"</b>을 해시한 값입니다. 객체 파일은 zlib으로 압축되어
+  <code>.git/objects/ce/013625…</code>처럼 앞 두 글자를 디렉터리 이름으로 써서 저장됩니다(이것을 loose object라고 부릅니다).
+</p>
+
+<div class="callout callout-tip">
+  <span class="callout-title">왜 커밋 해시가 "위조 방지"가 되나</span>
+  커밋은 tree 해시와 부모 해시를 포함하고, tree는 blob 해시를 포함합니다. 과거 파일 한 글자를 바꾸면 그 blob → tree → 커밋 → 이후 모든 커밋의 해시가 바뀝니다.
+  그래서 "이력을 고쳤다"는 사실이 반드시 드러나며, 이것이 rebase 후 <code>push --force</code>가 필요한 이유이기도 합니다.
+</div>
+
+<h3>SHA-1과 SHA-256 전환</h3>
+<ul>
+  <li>Git은 원래 <b>SHA-1</b>(40자 16진수)을 씁니다. 2017년 SHAttered로 SHA-1 충돌이 실증된 뒤 Git은 충돌 탐지 기능이 있는 <b>SHA-1DC</b> 구현을 기본으로 사용하고 있습니다.</li>
+  <li><b>SHA-256</b>(64자) 저장소는 <code>git init --object-format=sha256</code>으로 이미 만들 수 있지만, 두 형식 사이의 상호운용(interop)은 아직 개발 중이라 <b>SHA-1 저장소와 SHA-256 저장소는 서로 push/fetch할 수 없습니다</b>.</li>
+  <li>Git 프로젝트는 다음 메이저 버전(Git 3.0)에서 새 저장소의 기본값을 SHA-256으로 바꾸는 것을 <a href="https://git-scm.com/docs/BreakingChanges" target="_blank" rel="noopener">BreakingChanges 문서</a>에 예고했지만, 출시일은 정해져 있지 않습니다.</li>
+  <li><b>GitHub는 현재 SHA-256 저장소를 호스팅하지 않습니다.</b> GitHub에 올릴 저장소는 기본값(SHA-1) 그대로 만들어야 합니다. 상태가 바뀔 수 있는 항목이니 사용 전 공식 문서를 확인하세요.</li>
+</ul>
+
+<h2>2. ref, HEAD, detached HEAD</h2>
+<p>브랜치는 "커밋 해시 하나를 적어 둔 텍스트 파일"에 불과합니다. 그래서 브랜치를 만드는 비용은 사실상 0입니다.</p>
+<pre data-lang="bash">cat .git/HEAD                 # ref: refs/heads/main   ← HEAD는 브랜치를 가리킴
+git rev-parse main            # main이 가리키는 커밋 해시
+git symbolic-ref HEAD         # refs/heads/main
+git show-ref                  # 모든 ref와 해시 목록
+git for-each-ref --sort=-committerdate refs/heads/ \
+  --format='%(refname:short) %(committerdate:relative)'   # 최근 작업한 브랜치 순</pre>
+<table>
+  <thead><tr><th>ref 경로</th><th>의미</th></tr></thead>
+  <tbody>
+    <tr><td><code>refs/heads/*</code></td><td>로컬 브랜치</td></tr>
+    <tr><td><code>refs/remotes/origin/*</code></td><td>원격 추적 브랜치. <code>fetch</code> 때만 갱신되는 "마지막으로 본 원격의 모습"</td></tr>
+    <tr><td><code>refs/tags/*</code></td><td>태그</td></tr>
+    <tr><td><code>refs/stash</code></td><td>stash 목록의 맨 위</td></tr>
+    <tr><td><code>refs/pull/123/head</code></td><td>GitHub가 PR마다 만들어 주는 ref (<code>git fetch origin pull/123/head</code>로 받기 가능)</td></tr>
+  </tbody>
+</table>
+<p>
+  ref가 많아지면 Git은 개별 파일 대신 <code>.git/packed-refs</code> 한 파일에 모읍니다. 최신 Git은 대규모 저장소용 <b>reftable</b> 형식(<code>git init --ref-format=reftable</code>)도 지원합니다.
+</p>
+
+<h3>상대 참조 문법</h3>
+<table>
+  <thead><tr><th>표기</th><th>뜻</th></tr></thead>
+  <tbody>
+    <tr><td><code>HEAD~3</code></td><td>첫 번째 부모를 따라 3단계 위</td></tr>
+    <tr><td><code>HEAD^2</code></td><td>병합 커밋의 <b>두 번째</b> 부모(병합되어 들어온 쪽)</td></tr>
+    <tr><td><code>main@{1}</code></td><td>reflog 기준, main이 직전에 가리키던 커밋</td></tr>
+    <tr><td><code>main@{yesterday}</code></td><td>어제 시점의 main (로컬 reflog 기준)</td></tr>
+    <tr><td><code>@{u}</code> / <code>@{push}</code></td><td>현재 브랜치의 upstream / push 대상</td></tr>
+    <tr><td><code>A..B</code></td><td>B에는 있고 A에는 없는 커밋 (<code>git log origin/main..HEAD</code> = 아직 push 안 한 커밋)</td></tr>
+    <tr><td><code>A...B</code></td><td>대칭 차집합. <code>git diff A...B</code>는 "merge base 대비 B의 변경" = PR 화면의 diff</td></tr>
+    <tr><td><code>:/fix login</code></td><td>메시지에 "fix login"이 들어간 가장 최근 커밋</td></tr>
+  </tbody>
+</table>
+
+<h3>detached HEAD</h3>
+<p>
+  HEAD가 브랜치가 아니라 <b>커밋 해시를 직접</b> 가리키는 상태입니다. 태그나 과거 커밋을 체크아웃하면 이렇게 됩니다.
+  이 상태에서도 커밋은 만들어지지만, 다른 곳으로 이동하는 순간 그 커밋을 가리키는 이름이 없어 "고아"가 됩니다.
+</p>
+<pre data-lang="bash">git switch --detach v1.2.0    # 의도적으로 detached 상태 진입
+# ...실험 커밋...
+git switch -c experiment       # 지금 위치에 브랜치 이름을 붙여 살리기
+# 이미 떠났다면: git reflog 에서 해시를 찾아 git branch experiment &lt;해시&gt;</pre>
+
+<h2>3. index(스테이징 영역)의 실체</h2>
+<p>
+  <code>.git/index</code>는 "다음 커밋의 tree"를 평평하게 펼친 목록입니다. 각 항목에 경로, blob 해시, 모드, 그리고 파일의 <b>stat 정보</b>(크기·수정 시각 등)가 들어 있어
+  <code>git status</code>가 모든 파일을 다시 해시하지 않고도 변경 여부를 빠르게 판단합니다.
+</p>
+<pre data-lang="bash">git ls-files --stage          # 100644 3b18e51... 0	README.md   (마지막 숫자는 stage 번호)
+git ls-files -s src/          # 특정 경로만
+git diff                      # 작업 디렉터리 vs index
+git diff --staged             # index vs HEAD  (= 다음 커밋에 들어갈 내용)
+git add -p                    # 변경을 hunk 단위로 골라 스테이징</pre>
+<p>
+  충돌이 나면 같은 경로가 index에 <b>stage 1(공통 조상)·2(ours)·3(theirs)</b>로 세 번 기록됩니다. <code>git show :1:path</code>, <code>:2:path</code>, <code>:3:path</code>로 각각 꺼내 볼 수 있고,
+  충돌을 해결하고 <code>git add</code>하면 stage 0 하나로 합쳐집니다.
+</p>
+
+<h2>4. packfile, gc, maintenance</h2>
+<p>
+  loose object가 쌓이면 Git은 이것들을 <b>packfile</b>(<code>.git/objects/pack/*.pack</code> + <code>.idx</code>)로 묶습니다.
+  비슷한 객체끼리는 <b>delta 압축</b>(한 객체를 다른 객체와의 차이로 저장)을 적용합니다. Git은 논리적으로는 스냅샷을 저장하지만, 물리적으로는 이렇게 차이를 저장해 용량을 줄입니다.
+  push/fetch로 오가는 데이터도 packfile 형식입니다.
+</p>
+<pre data-lang="bash">git count-objects -vH         # loose/pack 객체 수와 용량
+git gc                        # 압축 + 오래된 unreachable 객체 정리
+git maintenance start         # 백그라운드 정기 유지보수 예약 (prefetch, commit-graph, 증분 repack 등)
+git verify-pack -v .git/objects/pack/pack-*.idx | sort -k3 -n | tail -5   # 가장 큰 객체 찾기</pre>
+<div class="callout callout-warn">
+  <span class="callout-title">gc가 지우는 것과 지우지 않는 것</span>
+  reachable 객체와 reflog가 아직 기억하는 객체는 지우지 않습니다. 기본 설정에서 reflog 항목은 도달 가능한 경우 90일, 도달 불가능한 경우 30일 동안 유지되고(<code>gc.reflogExpire</code>, <code>gc.reflogExpireUnreachable</code>),
+  어떤 ref에서도 닿지 않는 loose object는 기본 2주의 유예 기간(<code>gc.pruneExpire</code>)이 지난 뒤 삭제됩니다. 즉, <b>실수로 잃어버린 커밋은 대부분 한동안 되살릴 수 있습니다.</b>
+</div>
+
+<h2>5. reflog: "사라진" 커밋 되살리기</h2>
+<p>
+  reflog는 <b>HEAD와 각 브랜치가 어디를 가리켰는지</b>의 로컬 이동 기록입니다. <code>reset --hard</code>, 잘못된 rebase, 브랜치 삭제 후에도 대부분 여기서 찾을 수 있습니다.
+  단, reflog는 <b>내 컴퓨터에만</b> 있고 push되지 않습니다.
+</p>
+<pre data-lang="bash">git reflog                    # HEAD@{0}: reset: moving to HEAD~3
+                              # HEAD@{1}: commit: 결제 모듈 리팩터링   ← 이걸 살리고 싶다
+git reflog show feature/pay   # 특정 브랜치의 이동 기록
+
+git branch rescue HEAD@{1}    # 그 지점에 브랜치를 붙여 보존
+git reset --hard HEAD@{1}     # 또는 현재 브랜치를 그 지점으로 되돌리기
+
+# reflog에도 없다면(예: 다른 사람이 만든 커밋, 오래된 stash): 도달 불가능한 객체 검색
+git fsck --lost-found         # dangling commit/blob 목록, .git/lost-found 에 복사</pre>
+
+<h2>6. 병합(merge)의 내부</h2>
+<h3>fast-forward vs 병합 커밋</h3>
+<p>
+  <code>main</code>이 <code>feature</code>의 조상이라면 Git은 새 커밋 없이 <code>main</code> 이름표를 앞으로 옮기기만 합니다(<b>fast-forward</b>).
+  두 브랜치가 갈라졌다면 <b>부모가 두 개인 병합 커밋</b>을 만듭니다.
+</p>
+<pre data-lang="bash">git merge feature             # 가능하면 fast-forward, 아니면 병합 커밋
+git merge --no-ff feature     # 항상 병합 커밋 (기능 단위를 이력에 남기고 싶을 때)
+git merge --ff-only feature   # fast-forward 불가하면 실패 (pull 기본값으로도 추천)
+git config --global pull.ff only</pre>
+
+<h3>3-way merge와 merge base</h3>
+<figure class="diagram">
+  <svg viewBox="0 0 680 190" role="img" aria-label="merge base에서 main과 feature가 갈라졌다가 병합 커밋으로 합쳐지는 그림">
+    <defs>
+      <marker id="xg-arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="var(--ink-2)" /></marker>
+    </defs>
+    <circle cx="80" cy="95" r="22" fill="var(--c-stage-soft)" stroke="var(--c-stage)" stroke-width="2.5" />
+    <text x="80" y="100" text-anchor="middle" font-weight="800">B</text>
+    <text x="80" y="140" text-anchor="middle" class="d-sub">merge base</text>
+    <circle cx="240" cy="45" r="20" fill="var(--c-repo-soft)" stroke="var(--c-repo)" stroke-width="2" /><text x="240" y="50" text-anchor="middle">M1</text>
+    <circle cx="380" cy="45" r="20" fill="var(--c-repo-soft)" stroke="var(--c-repo)" stroke-width="2" /><text x="380" y="50" text-anchor="middle">M2</text>
+    <circle cx="240" cy="145" r="20" fill="var(--c-work-soft)" stroke="var(--c-work)" stroke-width="2" /><text x="240" y="150" text-anchor="middle">F1</text>
+    <circle cx="380" cy="145" r="20" fill="var(--c-work-soft)" stroke="var(--c-work)" stroke-width="2" /><text x="380" y="150" text-anchor="middle">F2</text>
+    <circle cx="540" cy="95" r="24" fill="var(--c-repo)" stroke="var(--c-repo)" stroke-width="2" /><text x="540" y="100" text-anchor="middle" style="fill:#fff" font-weight="800">M</text>
+    <g stroke="var(--ink-2)" stroke-width="2" fill="none">
+      <path d="M100 84 L218 52" marker-end="url(#xg-arr2)" /><path d="M260 45 H358" marker-end="url(#xg-arr2)" /><path d="M400 52 L516 86" marker-end="url(#xg-arr2)" />
+      <path d="M100 106 L218 138" marker-end="url(#xg-arr2)" /><path d="M260 145 H358" marker-end="url(#xg-arr2)" /><path d="M400 138 L516 104" marker-end="url(#xg-arr2)" />
+    </g>
+    <text x="310" y="22" text-anchor="middle" class="d-sub">main (ours)</text>
+    <text x="310" y="182" text-anchor="middle" class="d-sub">feature (theirs)</text>
+    <text x="610" y="90" class="d-sub">병합 커밋</text>
+    <text x="610" y="108" class="d-sub">부모 2개</text>
+  </svg>
+</figure>
+<p>
+  Git은 두 끝(M2, F2)만 비교하지 않고 <b>공통 조상 B</b>까지 세 지점을 비교합니다. 한쪽만 바꾼 부분은 그 변경을 채택하고,
+  양쪽이 <b>같은 부분을 다르게</b> 바꿨을 때만 충돌로 표시합니다. 그래서 "충돌이 났다" = "같은 줄 근처를 양쪽이 고쳤다"입니다.
+</p>
+<pre data-lang="bash">git merge-base main feature   # B의 해시
+git diff main...feature       # B 이후 feature에서 바뀐 것만 (PR diff와 같은 관점)
+git config --global merge.conflictStyle zdiff3   # 충돌 표시에 공통 조상(base) 내용도 함께 보여 줌</pre>
+
+<h3>ort 전략</h3>
+<p>
+  Git 2.34부터 기본 병합 엔진은 <b>ort</b>("Ostensibly Recursive's Twin")입니다. 이전 기본값 <code>recursive</code>를 다시 구현해 rename이 많은 큰 저장소에서 훨씬 빠르고,
+  병합 도중 작업 트리를 건드리지 않고 결과를 메모리에서 계산합니다. Git 2.50부터 <code>-s recursive</code>는 ort의 별칭이 되었습니다
+  (<a href="https://git-scm.com/docs/merge-strategies" target="_blank" rel="noopener">merge-strategies 문서</a>).
+</p>
+<table>
+  <thead><tr><th>옵션</th><th>효과</th></tr></thead>
+  <tbody>
+    <tr><td><code>-X ours</code> / <code>-X theirs</code></td><td>충돌한 hunk만 한쪽을 자동 채택 (충돌 안 난 상대 변경은 그대로 반영)</td></tr>
+    <tr><td><code>-s ours</code></td><td>상대 브랜치 내용을 <b>완전히 무시</b>하고 병합 기록만 남김 (전혀 다른 의미이니 주의)</td></tr>
+    <tr><td><code>-X ignore-all-space</code></td><td>공백 차이를 무시하고 병합</td></tr>
+    <tr><td><code>-s octopus</code></td><td>3개 이상 브랜치를 한 번에 병합 (충돌이 없을 때만)</td></tr>
+  </tbody>
+</table>
+<div class="callout callout-tip">
+  <span class="callout-title">같은 충돌을 반복해서 푸는 중이라면: rerere</span>
+  <code>git config --global rerere.enabled true</code>를 켜면 Git이 "이 충돌은 이렇게 해결했다"를 기억했다가 같은 충돌이 다시 나면 자동으로 적용합니다. 장기 브랜치를 자주 rebase할 때 특히 유용합니다.
+</div>
+
+<h2>7. rebase: 이력을 다시 쓰기</h2>
+<p>
+  <code>git rebase main</code>은 현재 브랜치의 커밋들을 <b>main 끝에 하나씩 다시 적용(cherry-pick)</b>합니다. 내용은 같아도 부모가 바뀌므로 <b>새 해시의 새 커밋</b>이 생깁니다.
+  결과는 병합 커밋 없는 일직선 이력입니다.
+</p>
+<pre data-lang="bash">git switch feature
+git rebase main               # feature의 커밋을 main 위로 옮김
+# 충돌 시: 파일 수정 → git add 파일 → git rebase --continue
+#          포기: git rebase --abort   (rebase 시작 전으로 완전 복귀)
+
+git pull --rebase             # 원격 변경 위에 내 로컬 커밋을 다시 쌓기
+git rebase --onto main old-base feature   # old-base 이후 feature 커밋만 main 위로 이식</pre>
+
+<h3>interactive rebase: 커밋 다듬기</h3>
+<pre data-lang="bash">git rebase -i HEAD~4
+# 편집기가 열림 (위가 오래된 커밋)
+# pick   a1b2c3d 로그인 폼
+# squash e4f5a6b 오타 수정        ← 바로 위 커밋에 합치고 메시지도 합침
+# fixup  c7d8e9f 린트            ← 합치되 메시지는 버림
+# reword 0a1b2c3 API 연결        ← 메시지만 수정
+# (drop: 커밋 삭제, edit: 그 커밋에서 멈춰 수정, 줄 순서 변경 = 커밋 순서 변경)
+
+# 나중에 합칠 커밋을 미리 표시해 두는 습관
+git commit --fixup a1b2c3d
+git rebase -i --autosquash main   # fixup! 커밋이 자동으로 제자리에 배치됨
+
+# 쌓아 올린(stacked) 브랜치들의 이름표도 함께 옮기기 (Git 2.38+)
+git rebase -i --update-refs main</pre>
+
+<h3>merge vs rebase, 그리고 황금률</h3>
+<table>
+  <thead><tr><th></th><th>merge</th><th>rebase</th></tr></thead>
+  <tbody>
+    <tr><td>이력 모양</td><td>실제로 일어난 그대로(갈라짐·합쳐짐)</td><td>일직선, 읽기 쉬움</td></tr>
+    <tr><td>기존 커밋</td><td>보존(해시 불변)</td><td>새 커밋으로 교체(해시 변경)</td></tr>
+    <tr><td>충돌 해결</td><td>병합 시 한 번</td><td>다시 적용되는 커밋마다 날 수 있음</td></tr>
+    <tr><td>공유 브랜치</td><td>안전</td><td><b>위험</b> — 다른 사람의 이력과 어긋남</td></tr>
+  </tbody>
+</table>
+<div class="callout callout-danger">
+  <span class="callout-title">황금률: 다른 사람이 이미 가져간 커밋은 rebase하지 않는다</span>
+  공유된 커밋을 rebase하고 강제 push하면, 동료의 로컬에는 옛 커밋이, 원격에는 새 커밋이 있어 같은 변경이 두 번 들어가거나 작업이 사라집니다.
+  내 PR 브랜치처럼 <b>나만 쓰는 브랜치</b>는 자유롭게 rebase해도 됩니다. 강제 push가 필요하면 반드시
+  <code>git push --force-with-lease</code>를 쓰세요. 원격이 내가 마지막으로 본 상태와 다르면(누군가 그 사이 push했다면) 거부되어 남의 커밋을 덮어쓰지 않습니다.
+</div>
+<p>
+  rebase 전·후를 비교하려면 <code>git range-diff main@{1} main feature@{1} feature</code>처럼 <b>range-diff</b>를 쓰면 "커밋 단위로 무엇이 달라졌는지"를 볼 수 있습니다.
+</p>
+
+<h2>8. cherry-pick</h2>
+<p>다른 브랜치의 <b>특정 커밋의 변경만</b> 현재 브랜치에 새 커밋으로 복사합니다. 핫픽스를 릴리스 브랜치에 옮길 때 자주 씁니다.</p>
+<pre data-lang="bash">git cherry-pick 3f2a9c1                 # 한 개
+git cherry-pick -x 3f2a9c1              # 메시지에 "(cherry picked from commit ...)" 기록 → 추적 용이
+git cherry-pick A^..B                   # A부터 B까지 범위
+git cherry-pick -m 1 &lt;병합커밋&gt;          # 병합 커밋을 가져올 때 기준 부모 지정
+git cherry-pick --continue | --abort</pre>
+<div class="callout callout-warn">
+  같은 변경이 두 브랜치에 서로 다른 해시로 존재하게 되므로, 나중에 두 브랜치를 병합하면 Git이 대개 알아서 처리하지만 이후 그 코드를 다시 고친 경우 충돌이 날 수 있습니다. 가능하면 "먼저 main에 고치고 → 릴리스 브랜치로 cherry-pick" 한 방향으로만 흐르게 하세요.
+</div>
+
+<h2>9. 되돌리기: revert vs reset, restore vs switch</h2>
+<h3>revert — 이력을 보존하며 취소</h3>
+<p><code>git revert &lt;커밋&gt;</code>은 그 커밋의 변경을 <b>반대로 적용한 새 커밋</b>을 만듭니다. 이미 push한 커밋을 취소하는 <b>유일하게 안전한</b> 방법입니다.</p>
+<pre data-lang="bash">git revert 3f2a9c1
+git revert -m 1 &lt;병합커밋&gt;     # 병합 커밋 되돌리기: 1번 부모(main 쪽)를 기준으로
+git revert --no-commit A..B     # 여러 커밋을 하나의 revert 커밋으로</pre>
+<div class="callout callout-warn">
+  <span class="callout-title">병합을 revert한 뒤 다시 병합하면 변경이 안 들어온다?</span>
+  병합 커밋을 revert해도 "그 브랜치의 커밋들은 이미 병합됐다"는 이력은 남습니다. 같은 브랜치를 다시 병합하면 Git은 새 커밋만 가져오므로, 먼저 <b>revert 커밋을 revert</b>한 뒤 병합해야 합니다.
+</div>
+
+<h3>reset — 브랜치 이름표를 옮기기</h3>
+<p><code>git reset &lt;커밋&gt;</code>은 <b>현재 브랜치가 가리키는 커밋</b>을 옮기고, 옵션에 따라 index와 작업 디렉터리까지 맞춥니다.</p>
+<table>
+  <thead><tr><th>모드</th><th>브랜치(HEAD)</th><th>index(스테이징)</th><th>작업 디렉터리</th><th>대표 용도</th></tr></thead>
+  <tbody>
+    <tr><td><code>--soft</code></td><td>이동</td><td>유지</td><td>유지</td><td>최근 커밋 몇 개를 합쳐 다시 커밋 (변경은 스테이징된 채 남음)</td></tr>
+    <tr><td><code>--mixed</code> (기본)</td><td>이동</td><td>대상 커밋으로 초기화</td><td>유지</td><td>커밋·스테이징 취소, 파일 변경은 보존</td></tr>
+    <tr><td><code>--hard</code></td><td>이동</td><td>초기화</td><td><b>초기화(커밋 안 된 변경 소실)</b></td><td>완전히 그 시점으로 되돌리기</td></tr>
+    <tr><td><code>--keep</code></td><td>이동</td><td>초기화</td><td>로컬 변경이 충돌하면 중단</td><td><code>--hard</code>의 안전한 대안</td></tr>
+  </tbody>
+</table>
+<div class="callout callout-danger">
+  <code>reset --hard</code>로 날아간 <b>커밋</b>은 reflog로 살릴 수 있지만, <b>한 번도 커밋·스테이징하지 않은 작업 디렉터리 변경</b>은 Git이 기록한 적이 없어 되살릴 수 없습니다. 실행 전 <code>git stash</code> 습관을 들이세요.
+</div>
+
+<h3>restore / switch vs checkout</h3>
+<p>
+  예전의 <code>git checkout</code>은 "브랜치 이동"과 "파일 되돌리기"라는 전혀 다른 두 일을 했습니다. Git 2.23에서 이를 나눈 <code>switch</code>와 <code>restore</code>가 추가되었습니다.
+</p>
+<table>
+  <thead><tr><th>하고 싶은 일</th><th>새 명령</th><th>옛 명령</th></tr></thead>
+  <tbody>
+    <tr><td>브랜치 이동</td><td><code>git switch main</code></td><td><code>git checkout main</code></td></tr>
+    <tr><td>브랜치 만들며 이동</td><td><code>git switch -c feat</code></td><td><code>git checkout -b feat</code></td></tr>
+    <tr><td>작업 디렉터리 변경 버리기</td><td><code>git restore app.js</code></td><td><code>git checkout -- app.js</code></td></tr>
+    <tr><td>스테이징 취소(파일은 유지)</td><td><code>git restore --staged app.js</code></td><td><code>git reset HEAD app.js</code></td></tr>
+    <tr><td>특정 커밋의 파일 버전 가져오기</td><td><code>git restore --source=HEAD~2 app.js</code></td><td><code>git checkout HEAD~2 -- app.js</code></td></tr>
+  </tbody>
+</table>
+
+<div class="quiz" data-answer="c">
+  <p class="quiz-q">이미 <code>main</code>에 push되어 동료들도 pull 한 커밋에 버그가 있습니다. 가장 적절한 취소 방법은?</p>
+  <div class="quiz-options">
+    <button type="button" data-opt="a"><code>git reset --hard HEAD~1</code> 후 <code>git push --force</code></button>
+    <button type="button" data-opt="b"><code>git rebase -i</code>로 해당 커밋을 drop</button>
+    <button type="button" data-opt="c"><code>git revert &lt;커밋&gt;</code> 후 일반 push</button>
+  </div>
+  <p class="quiz-explain">정답! 공유된 이력을 다시 쓰는 reset·rebase는 동료의 로컬 이력과 어긋납니다. revert는 "취소 커밋"을 새로 추가하므로 이력이 앞으로만 진행되어 안전합니다.</p>
+</div>
+
+<h2>10. stash: 작업을 잠시 치워 두기</h2>
+<pre data-lang="bash">git stash push -m "로그인 WIP"   # 수정·스테이징된 tracked 파일 보관
+git stash push -u                 # untracked 파일까지 (-a: ignored 파일까지)
+git stash push -p                 # hunk 단위로 골라서 보관
+git stash list                    # stash@{0}: On main: 로그인 WIP
+git stash show -p stash@{1}       # 내용 확인
+git stash apply stash@{1}         # 적용(목록에 남김)
+git stash pop                     # 적용 + 목록에서 제거 (충돌 시엔 제거하지 않음)
+git stash branch wip-login        # stash를 만든 커밋에서 새 브랜치를 만들어 적용</pre>
+<p>stash는 내부적으로 특수한 커밋입니다. 실수로 <code>drop</code>했더라도 출력된 해시나 <code>git fsck --unreachable | grep commit</code>으로 찾아 <code>git stash apply &lt;해시&gt;</code>할 수 있습니다.</p>
+
+<h2>11. bisect: 버그를 만든 커밋 이진 탐색</h2>
+<p>"지난주엔 됐는데 지금은 안 된다"면 커밋이 1,000개여도 약 10번(log₂1000)의 테스트로 범인을 찾습니다.</p>
+<pre data-lang="bash">git bisect start
+git bisect bad                 # 현재(HEAD)는 버그 있음
+git bisect good v1.4.0         # 이 태그 시점엔 정상
+# Git이 중간 커밋을 체크아웃 → 테스트 → good / bad 응답 반복
+git bisect good   # 또는 git bisect bad, 판단 불가면 git bisect skip
+git bisect reset               # 끝나면 원래 브랜치로 복귀
+
+# 자동화: 스크립트가 0이면 good, 1~127(125 제외)이면 bad, 125면 skip
+git bisect start HEAD v1.4.0
+git bisect run npm test</pre>
+
+<h2>12. 태그와 SemVer</h2>
+<table>
+  <thead><tr><th></th><th>lightweight 태그</th><th>annotated 태그</th></tr></thead>
+  <tbody>
+    <tr><td>정체</td><td>커밋을 가리키는 ref일 뿐</td><td>tag <b>객체</b>(작성자·날짜·메시지·서명 가능)</td></tr>
+    <tr><td>만들기</td><td><code>git tag v1.0.0</code></td><td><code>git tag -a v1.0.0 -m "첫 릴리스"</code></td></tr>
+    <tr><td>용도</td><td>개인용 임시 표시</td><td><b>릴리스</b>. <code>git describe</code> 기본 대상</td></tr>
+  </tbody>
+</table>
+<pre data-lang="bash">git tag -a v1.2.0 -m "엑셀 다중 시트 지원"
+git tag -s v1.2.0 -m "..."           # 서명된 태그
+git push origin v1.2.0               # 태그는 기본으로 push되지 않음
+git push --follow-tags               # 현재 push하는 커밋에 달린 annotated 태그만 함께
+git describe --tags                  # v1.2.0-5-g3f2a9c1 (태그 이후 5커밋, 현재 해시)
+git push origin :refs/tags/v1.2.0    # 원격 태그 삭제 (이미 배포된 태그는 옮기지 않는 것이 원칙)</pre>
+<p>
+  <a href="https://semver.org/lang/ko/" target="_blank" rel="noopener">유의적 버전(SemVer)</a>은 <code>MAJOR.MINOR.PATCH</code> 규칙입니다.
+  하위 호환이 깨지면 MAJOR, 호환되는 기능 추가는 MINOR, 호환되는 버그 수정은 PATCH를 올립니다. <code>1.0.0-rc.1</code>처럼 프리릴리스 표기도 가능하며, <code>0.y.z</code>는 "아직 공개 API가 안정되지 않음"을 뜻합니다.
+</p>
+
+<h2>13. worktree: 한 저장소, 여러 작업 폴더</h2>
+<p>stash나 두 번째 clone 없이, 같은 저장소의 다른 브랜치를 <b>별도 폴더에 동시에</b> 체크아웃합니다. 객체 DB는 공유하므로 빠르고 가볍습니다.</p>
+<pre data-lang="bash">git worktree add ../hotfix -b hotfix/login main   # ../hotfix 폴더에 새 브랜치로 체크아웃
+git worktree list
+git worktree remove ../hotfix
+git worktree prune                                 # 수동으로 지운 폴더의 기록 정리</pre>
+<p>같은 브랜치를 두 worktree에서 동시에 체크아웃할 수는 없습니다. 긴 빌드나 리뷰를 돌려 두고 다른 작업을 하거나, AI 코딩 에이전트 여러 개를 브랜치별로 병렬 실행할 때 유용합니다.</p>
+
+<h2>14. submodule vs subtree</h2>
+<table>
+  <thead><tr><th></th><th>submodule</th><th>subtree</th></tr></thead>
+  <tbody>
+    <tr><td>저장 방식</td><td>상위 저장소는 하위 저장소의 <b>커밋 해시(포인터)</b>만 기록 (<code>.gitmodules</code>)</td><td>하위 프로젝트의 파일을 상위 저장소에 <b>복사해 합침</b></td></tr>
+    <tr><td>clone</td><td><code>git clone --recurse-submodules</code> 필요</td><td>일반 clone으로 끝</td></tr>
+    <tr><td>장점</td><td>버전 고정이 명확, 저장소가 가벼움</td><td>사용자가 존재를 몰라도 됨</td></tr>
+    <tr><td>단점</td><td>업데이트 절차가 번거롭고 "detached HEAD" 상태가 흔함</td><td>상위로 변경을 되돌려 보내기(split/push)가 복잡</td></tr>
+  </tbody>
+</table>
+<pre data-lang="bash">git submodule add https://github.com/you/shared-lib libs/shared
+git submodule update --init --recursive
+git submodule update --remote libs/shared    # 하위 저장소의 추적 브랜치 최신으로
+
+git subtree add --prefix=libs/shared https://github.com/you/shared-lib main --squash
+git subtree pull --prefix=libs/shared https://github.com/you/shared-lib main --squash</pre>
+<div class="callout callout-tip">공유 코드가 정식 패키지(npm, PyPI 등)로 배포될 수 있다면 둘 다보다 <b>패키지 의존성</b>이 대개 더 단순합니다.</div>
+
+<h2>15. hooks: 이벤트마다 스크립트 실행</h2>
+<table>
+  <thead><tr><th>hook</th><th>시점</th><th>예시 용도</th></tr></thead>
+  <tbody>
+    <tr><td><code>pre-commit</code></td><td>커밋 메시지 입력 전</td><td>lint, 포맷, 비밀 키 탐지</td></tr>
+    <tr><td><code>commit-msg</code></td><td>메시지 작성 후</td><td>Conventional Commits 형식 검사</td></tr>
+    <tr><td><code>pre-push</code></td><td>push 전송 전</td><td>빠른 테스트</td></tr>
+    <tr><td><code>post-checkout</code>, <code>post-merge</code></td><td>체크아웃·병합 후</td><td>의존성 재설치 알림</td></tr>
+    <tr><td><code>pre-receive</code>, <code>update</code></td><td>서버 측</td><td>정책 강제 (GitHub.com에서는 대신 rulesets 사용)</td></tr>
+  </tbody>
+</table>
+<p>
+  <code>.git/hooks/</code>는 <b>버전 관리되지 않아</b> 팀과 공유되지 않습니다. 저장소 안의 폴더를 쓰려면 <code>git config core.hooksPath .githooks</code>를 쓰거나,
+  <a href="https://pre-commit.com/" target="_blank" rel="noopener">pre-commit</a>·husky 같은 도구를 씁니다.
+</p>
+<div class="callout callout-warn">
+  클라이언트 hook은 <code>git commit --no-verify</code>로 건너뛸 수 있습니다. 반드시 지켜야 하는 규칙은 hook이 아니라 <b>CI(GitHub Actions) + 브랜치 보호/rulesets</b>로 강제하세요. hook은 "빨리 알려 주는 친절", CI는 "통과해야 하는 문"입니다.
+</div>
+<pre data-lang="bash">#!/bin/sh
+# .githooks/commit-msg — Conventional Commits 형식 간단 검사
+if ! head -1 "$1" | grep -Eq '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?!?: .+'; then
+  echo "커밋 메시지는 'type(scope): 설명' 형식이어야 합니다." &gt;&amp;2
+  exit 1
+fi</pre>
+
+<h2>16. .gitattributes: 줄바꿈(CRLF/LF), 바이너리, LFS</h2>
+<h3>줄바꿈 문제가 생기는 이유</h3>
+<p>
+  Windows는 줄 끝에 <code>CRLF</code>(<code>\r\n</code>), macOS·Linux는 <code>LF</code>(<code>\n</code>)를 씁니다. 설정이 제각각이면
+  <b>한 줄도 안 고쳤는데 파일 전체가 바뀐 diff</b>가 생기고, 셸 스크립트가 <code>/bin/sh^M: bad interpreter</code>로 실패합니다.
+  PART 2의 워크플로우처럼 <b>windows-latest runner</b>에서 checkout·커밋하는 경우에도 이 문제가 나타날 수 있습니다(Git for Windows는 설치 시 보통 <code>core.autocrlf=true</code>를 권장값으로 설정).
+</p>
+<p>개인 설정(<code>core.autocrlf</code>)에 기대지 말고, <b>저장소에 <code>.gitattributes</code>를 두어 규칙을 고정</b>하는 것이 정답입니다.</p>
+<pre data-lang="bash"># .gitattributes
+* text=auto eol=lf          # 텍스트로 판단되면 저장소엔 LF, 체크아웃도 LF
+*.bat  text eol=crlf        # Windows 전용 스크립트는 CRLF
+*.ps1  text eol=crlf
+*.sh   text eol=lf
+*.xlsx binary               # 엑셀은 바이너리: 줄바꿈 변환·텍스트 diff·병합 금지
+*.png  binary
+*.json text eol=lf linguist-generated=true   # GitHub diff에서 생성 파일로 접기</pre>
+<pre data-lang="bash"># .gitattributes를 추가한 뒤 기존 파일을 새 규칙으로 정규화
+git add --renormalize .
+git commit -m "chore: 줄바꿈 규칙 정규화"
+
+git ls-files --eol          # 파일별 index/작업 디렉터리 줄바꿈과 적용된 속성 확인</pre>
+<div class="callout callout-tip">
+  <span class="callout-title">바이너리 파일의 diff·병합</span>
+  <code>binary</code>는 <code>-text -diff -merge</code>의 축약입니다. xlsx처럼 ZIP 기반 문서는 Git이 의미 있는 diff를 만들 수 없어 충돌 시 "어느 한쪽 파일 전체"를 골라야 합니다.
+  그래서 PART 2에서는 엑셀 원본이 아니라 <b>변환된 JSON</b>을 커밋해 변경을 추적 가능하게 만든 것입니다. <code>diff=</code> 드라이버와 <code>textconv</code>로 바이너리를 텍스트로 변환해 diff를 보는 방법도 있습니다.
+</div>
+
+<h3>Git LFS</h3>
+<p>
+  Git은 모든 버전의 모든 파일을 clone할 때 받아 오므로, 큰 바이너리(영상, 데이터셋, 디자인 파일)를 자주 바꾸면 저장소가 급격히 무거워집니다.
+  <b>Git LFS</b>는 저장소에는 작은 포인터 파일만 커밋하고 실제 내용은 별도 LFS 저장소에 둡니다.
+</p>
+<pre data-lang="bash">git lfs install
+git lfs track "*.psd"        # .gitattributes 에 "*.psd filter=lfs diff=lfs merge=lfs -text" 추가
+git add .gitattributes design.psd
+git commit -m "chore: psd를 LFS로 관리"
+git lfs ls-files
+git lfs migrate import --include="*.psd" --everything   # 이미 커밋된 파일을 LFS로 이전(이력 재작성!)</pre>
+<p>GitHub의 LFS 저장 용량·대역폭은 플랜과 과금 설정에 따라 다르므로 <a href="https://docs.github.com/repositories/working-with-files/managing-large-files/about-git-large-file-storage" target="_blank" rel="noopener">공식 문서</a>를 확인하세요.</p>
+
+<h2>17. 커밋 서명</h2>
+<p>
+  커밋의 author 이름·이메일은 <b>누구나 아무 값으로나</b> 설정할 수 있습니다(<code>git config user.email</code>). 서명은 "이 커밋을 정말 이 키의 소유자가 만들었다"는 증명입니다.
+  GitHub는 등록된 키로 검증되면 커밋 옆에 <b>Verified</b> 배지를 표시합니다.
+</p>
+<pre data-lang="bash"># SSH 키로 서명 (Git 2.34+) — 이미 GitHub용 SSH 키가 있다면 가장 간단
+git config --global gpg.format ssh
+git config --global user.signingkey ~/.ssh/id_ed25519.pub
+git config --global commit.gpgsign true
+git config --global tag.gpgsign true
+# GitHub Settings → SSH and GPG keys 에서 같은 공개키를 "Signing Key" 유형으로 추가
+
+git log --show-signature -1   # 로컬 검증 (SSH는 gpg.ssh.allowedSignersFile 설정 필요)</pre>
+<p>GPG 키(<code>gpg.format openpgp</code>, 기본값)나 S/MIME(X.509)도 쓸 수 있습니다. 웹 UI에서 만든 커밋과 GitHub Actions의 일부 커밋은 GitHub의 키로 서명됩니다. 브랜치 보호/rulesets의 "Require signed commits"로 서명을 강제할 수 있습니다.</p>
+
+<h2>18. 브랜치 전략</h2>
+<table>
+  <thead><tr><th>전략</th><th>구조</th><th>잘 맞는 경우</th><th>주의점</th></tr></thead>
+  <tbody>
+    <tr><td><b>GitHub Flow</b></td><td><code>main</code> + 짧은 기능 브랜치 → PR → 리뷰·CI → 병합 → 배포</td><td>웹 서비스처럼 <b>지속 배포</b>, 배포 버전이 하나</td><td>main이 항상 배포 가능해야 하므로 CI·리뷰가 탄탄해야 함</td></tr>
+    <tr><td><b>Git Flow</b></td><td><code>main</code>(릴리스) + <code>develop</code> + feature/release/hotfix 브랜치</td><td>설치형 SW·모바일 앱처럼 <b>버전 릴리스 주기</b>가 있고 여러 버전을 유지보수</td><td>브랜치가 많아 병합 비용이 큼. 지속 배포에는 과함</td></tr>
+    <tr><td><b>Trunk-based</b></td><td>모두가 trunk(main)에 하루 1회 이상 작은 단위로 병합. 미완성 기능은 feature flag로 숨김</td><td>숙련된 팀, 높은 배포 빈도, 강한 자동 테스트</td><td>feature flag 관리, 테스트 자동화 수준이 전제</td></tr>
+  </tbody>
+</table>
+<p>
+  고민된다면 <b>GitHub Flow로 시작</b>하세요. 이 강의의 실습도 GitHub Flow입니다. 장기 브랜치는 오래 살수록 충돌이 커지므로, 어떤 전략이든 <b>브랜치 수명을 짧게</b> 유지하는 것이 핵심입니다.
+</p>
+
+<h2>19. 커밋 메시지 규칙: Conventional Commits</h2>
+<pre data-nocopy>&lt;type&gt;(&lt;scope&gt;): &lt;설명&gt;        ← 50자 안팎, 명령형/현재형
+
+&lt;본문: 무엇을, 왜 (어떻게는 코드가 말해 줌)&gt;   ← 72자 줄바꿈
+
+&lt;footer: BREAKING CHANGE: ..., Refs #12&gt;</pre>
+<table>
+  <thead><tr><th>type</th><th>의미</th><th>SemVer 영향(자동 릴리스 도구 기준)</th></tr></thead>
+  <tbody>
+    <tr><td><code>feat</code></td><td>새 기능</td><td>MINOR</td></tr>
+    <tr><td><code>fix</code></td><td>버그 수정</td><td>PATCH</td></tr>
+    <tr><td><code>feat!</code> 또는 footer <code>BREAKING CHANGE:</code></td><td>하위 호환 깨짐</td><td>MAJOR</td></tr>
+    <tr><td><code>docs</code>, <code>refactor</code>, <code>test</code>, <code>build</code>, <code>ci</code>, <code>chore</code>, <code>perf</code>, <code>style</code></td><td>기타 분류</td><td>보통 릴리스 없음</td></tr>
+  </tbody>
+</table>
+<p>
+  <a href="https://www.conventionalcommits.org/ko/v1.0.0/" target="_blank" rel="noopener">Conventional Commits</a> 형식을 지키면 release-please, semantic-release 같은 도구가 버전 번호와 CHANGELOG를 자동으로 만들어 줍니다.
+  공동 작성자는 footer에 <code>Co-authored-by: Name &lt;you@example.com&gt;</code>를 넣으면 GitHub가 함께 표시합니다.
+</p>
+
+<h2>20. 큰 저장소 다루기: shallow·partial clone, sparse-checkout</h2>
+<table>
+  <thead><tr><th>기법</th><th>명령</th><th>받지 않는 것</th><th>적합한 곳</th></tr></thead>
+  <tbody>
+    <tr><td>shallow clone</td><td><code>git clone --depth 1 URL</code></td><td>오래된 <b>커밋 이력</b></td><td>CI 빌드 (actions/checkout 기본값이 <code>fetch-depth: 1</code>)</td></tr>
+    <tr><td>blobless clone</td><td><code>git clone --filter=blob:none URL</code></td><td>과거 버전의 <b>파일 내용</b>(필요할 때 지연 다운로드)</td><td>개발자 PC — 이력 탐색은 가능하면서 빠름</td></tr>
+    <tr><td>treeless clone</td><td><code>git clone --filter=tree:0 URL</code></td><td>과거 tree와 blob</td><td>한 번 빌드하고 버리는 환경</td></tr>
+    <tr><td>sparse-checkout</td><td><code>git sparse-checkout set --cone apps/web libs/ui</code></td><td>(받긴 하되) 작업 디렉터리에 <b>펼치지 않는</b> 폴더</td><td>모노레포에서 일부만 작업</td></tr>
+  </tbody>
+</table>
+<pre data-lang="bash">git clone --filter=blob:none --sparse https://github.com/you/monorepo
+cd monorepo
+git sparse-checkout set --cone apps/dashboard
+git fetch --unshallow          # shallow 저장소를 전체 이력으로 확장</pre>
+<div class="callout callout-warn">
+  shallow clone에서는 <code>git describe</code>, <code>git log</code> 범위 계산, 변경 파일 비교(<code>git diff origin/main...HEAD</code>)가 실패하거나 틀린 결과를 낼 수 있습니다. CI에서 이런 명령을 쓴다면 <code>actions/checkout</code>에 <code>fetch-depth: 0</code>(전체 이력)을 지정하세요.
+</div>
+
+<h2>21. 상황별 복구 레시피</h2>
+<table>
+  <thead><tr><th>상황</th><th>해결</th></tr></thead>
+  <tbody>
+    <tr><td>마지막 커밋 메시지를 고치고 싶다 (push 전)</td><td><code>git commit --amend -m "새 메시지"</code></td></tr>
+    <tr><td>마지막 커밋에 파일 하나를 빠뜨렸다 (push 전)</td><td><code>git add 빠진파일 &amp;&amp; git commit --amend --no-edit</code></td></tr>
+    <tr><td>방금 커밋을 취소하되 변경은 남기고 싶다</td><td><code>git reset --soft HEAD~1</code></td></tr>
+    <tr><td>main에 실수로 커밋했다 (push 전) — 브랜치로 옮기기</td><td><code>git branch feature &amp;&amp; git reset --hard origin/main &amp;&amp; git switch feature</code></td></tr>
+    <tr><td>엉뚱한 브랜치에서 작업 중(커밋 전)</td><td><code>git stash &amp;&amp; git switch 올바른브랜치 &amp;&amp; git stash pop</code> (또는 바로 <code>git switch</code> — 충돌이 없으면 변경이 따라옴)</td></tr>
+    <tr><td><code>reset --hard</code> 했더니 커밋이 사라졌다</td><td><code>git reflog</code> → <code>git reset --hard HEAD@{n}</code></td></tr>
+    <tr><td>브랜치를 지웠다</td><td><code>git reflog</code>에서 마지막 해시 찾기 → <code>git branch 이름 &lt;해시&gt;</code></td></tr>
+    <tr><td>rebase가 엉망이 됐다 (진행 중)</td><td><code>git rebase --abort</code></td></tr>
+    <tr><td>rebase를 끝냈는데 결과가 이상하다</td><td><code>git reset --hard ORIG_HEAD</code> (또는 <code>git reflog</code>에서 rebase 시작 전 지점)</td></tr>
+    <tr><td>병합 충돌을 그만두고 싶다</td><td><code>git merge --abort</code></td></tr>
+    <tr><td>push한 커밋을 취소해야 한다</td><td><code>git revert &lt;해시&gt;</code> → 일반 push</td></tr>
+    <tr><td>push가 rejected (non-fast-forward)</td><td><code>git pull --rebase</code>로 원격 변경을 받아 쌓은 뒤 push. 무작정 <code>--force</code> 금지</td></tr>
+    <tr><td>파일 하나를 특정 커밋 시점으로 되돌리기</td><td><code>git restore --source=&lt;해시&gt; 경로</code></td></tr>
+    <tr><td>실수로 추적된 파일을 무시하고 싶다</td><td><code>.gitignore</code>에 추가 + <code>git rm --cached 경로</code> (파일 자체는 남음)</td></tr>
+    <tr><td>비밀번호·키를 커밋해 push했다</td><td><b>1순위: 즉시 키 폐기·재발급.</b> 그다음 <code>git filter-repo</code>로 이력에서 제거 후 강제 push, GitHub 지원팀에 캐시된 뷰 삭제 요청 검토. 이미 clone·fork된 사본은 회수 불가</td></tr>
+    <tr><td>누가 이 줄을 언제 바꿨나</td><td><code>git blame -w -C 파일</code>, 줄 범위의 전체 이력은 <code>git log -L 10,20:파일</code></td></tr>
+    <tr><td>코드에서 문자열이 추가/삭제된 커밋 찾기</td><td><code>git log -S "함수이름" --oneline</code> (pickaxe)</td></tr>
+    <tr><td>작업 디렉터리를 완전히 깨끗하게</td><td><code>git clean -nd</code>로 미리보기 → <code>git clean -fd</code> (되돌릴 수 없음)</td></tr>
+  </tbody>
+</table>
+<div class="callout callout-danger">
+  <span class="callout-title">이력 재작성 도구는 filter-repo</span>
+  Git 공식 문서도 <code>git filter-branch</code> 대신 별도 도구인 <a href="https://github.com/newren/git-filter-repo" target="_blank" rel="noopener">git filter-repo</a>를 권장합니다.
+  이력 재작성은 모든 해시를 바꾸므로 팀원 전원이 다시 clone해야 합니다. 그리고 <b>유출된 비밀은 이력을 지워도 이미 유출된 것</b>입니다 — 키 폐기가 항상 먼저입니다.
+</div>
+
+<div class="quiz" data-answer="b">
+  <p class="quiz-q">팀원이 Windows에서 <code>.sh</code> 파일을 커밋한 뒤 Linux CI에서 <code>bad interpreter: /bin/sh^M</code> 오류가 납니다. 재발을 막는 가장 좋은 방법은?</p>
+  <div class="quiz-options">
+    <button type="button" data-opt="a">팀원 모두에게 <code>core.autocrlf</code>를 직접 설정하라고 공지한다</button>
+    <button type="button" data-opt="b">저장소에 <code>.gitattributes</code>로 <code>*.sh text eol=lf</code>를 지정하고 <code>git add --renormalize .</code> 한다</button>
+    <button type="button" data-opt="c">CI에서 매번 <code>dos2unix</code>를 실행한다</button>
+  </div>
+  <p class="quiz-explain">정답! <code>.gitattributes</code>는 저장소와 함께 버전 관리되므로 누가 어떤 OS·설정으로 clone하든 같은 규칙이 적용됩니다. 개인 설정은 빠뜨리기 쉽고, CI에서 고치는 것은 증상만 가립니다.</p>
+</div>
+
+<h2>더 읽을거리</h2>
+<ul>
+  <li><a href="https://git-scm.com/book/ko/v2" target="_blank" rel="noopener">Pro Git (한국어판)</a> — 특히 10장 "Git의 내부"</li>
+  <li><a href="https://git-scm.com/docs" target="_blank" rel="noopener">Git 공식 레퍼런스</a> — 명령별 매뉴얼 (<code>git help 명령</code>과 동일)</li>
+  <li><a href="https://git-scm.com/docs/gitattributes" target="_blank" rel="noopener">gitattributes 문서</a>, <a href="https://git-scm.com/docs/githooks" target="_blank" rel="noopener">githooks 문서</a></li>
+  <li><a href="https://github.blog/open-source/git/" target="_blank" rel="noopener">GitHub 블로그의 Git 릴리스 하이라이트</a> — 새 버전 기능을 쉽게 정리</li>
+</ul>

@@ -14,7 +14,7 @@ export const COURSE = [
     part: 'PART 1 · Git',
     pages: [
       { id: 'git-concepts', title: 'Git 핵심 개념', minutes: 20 },
-      { id: 'git-lab', title: '인터랙티브 Git 실습실', minutes: 50, wide: true, badge: 'LAB' },
+      { id: 'git-lab', title: '인터랙티브 Git 실습실', minutes: 70, wide: true, badge: 'LAB' },
     ],
   },
   {
@@ -27,6 +27,7 @@ export const COURSE = [
       { id: 'step-pages', title: 'Step 4 · Pages 대시보드와 로그인', minutes: 30 },
       { id: 'step-run', title: 'Step 5 · 이슈로 엑셀 올려 전체 실행', minutes: 15 },
       { id: 'step-review', title: 'Step 6 · PR과 AI 코드 리뷰', minutes: 25 },
+      { id: 'recap', title: '실습 돌아보기', minutes: 10, badge: '정리' },
     ],
   },
   {
@@ -34,6 +35,15 @@ export const COURSE = [
     pages: [
       { id: 'limits', title: '한계와 다음 단계', minutes: 20, badge: '중요' },
       { id: 'cheatsheet', title: '치트시트 · 프롬프트 모음', minutes: 5 },
+    ],
+  },
+  {
+    part: 'PART 3 · 전문가 수준의 지식 학습 (참고)',
+    pages: [
+      { id: 'expert-git', title: 'Git 깊이 알기', minutes: 40, badge: '참고' },
+      { id: 'expert-github', title: 'GitHub 깊이 알기', minutes: 35, badge: '참고' },
+      { id: 'expert-actions', title: 'GitHub Actions 깊이 알기', minutes: 40, badge: '참고' },
+      { id: 'expert-pages', title: 'GitHub Pages 깊이 알기', minutes: 25, badge: '참고' },
     ],
   },
 ];

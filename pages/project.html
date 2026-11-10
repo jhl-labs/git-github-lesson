@@ -4,9 +4,63 @@
   서버 한 대 없이 <strong>GitHub만으로</strong> 이걸 만들어 봅니다.
 </p>
 
+<section class="theory">
+  <h2>📚 시작 전 이론: 서버 없이 서비스가 돌아가는 원리</h2>
+  <p>
+    이번 PART 2는 화면 속 흉내가 아니라 <b>진짜 GitHub에서 진짜로 실행되는</b> 프로젝트입니다. Step 1~6을 시작하기 전에
+    "누가, 어디서, 언제 일하는지" 큰 그림을 먼저 잡아 두면 각 Step에서 길을 잃지 않아요.
+  </p>
+  <dl class="theory-terms">
+    <div><dt>이벤트 기반 자동화</dt><dd>"이슈가 열렸다", "push 됐다" 같은 <b>사건(이벤트)</b>이 생길 때만 정해 둔 작업이 실행되는 방식. 평소에는 아무것도 돌지 않아요.</dd></div>
+    <div><dt>Runner</dt><dd>GitHub Actions의 작업을 실제로 실행하는 컴퓨터. 이번 실습의 <code>windows-latest</code>는 GitHub이 클라우드(Azure)에서 <b>job마다 새로 만들어 주는 실제 Windows 서버(VM)</b>입니다.</dd></div>
+    <div><dt>정적 사이트</dt><dd>미리 만들어 둔 파일(HTML·JS·JSON)을 그대로 내려주기만 하는 웹사이트. 서버 프로그램이 없어도 됩니다.</dd></div>
+    <div><dt>배포용 브랜치</dt><dd>사람이 고치는 소스(<code>main</code>)와 봇이 만든 결과물(<code>docs</code>)을 브랜치로 나눠 관리하는 방법.</dd></div>
+    <div><dt>바이브 코딩</dt><dd>AI(Claude Code)에게 목표와 제약을 말로 설명해 코드를 만들게 하고, 사람은 결과를 <b>읽고·실행하고·판단</b>하는 개발 방식.</dd></div>
+  </dl>
+
+  <h3>보통의 웹 서비스 vs 오늘의 구조</h3>
+  <p>
+    보통 "엑셀을 올리면 웹에서 보여주는 서비스"를 만들려면 24시간 켜져 있는 서버, 업로드 API, 데이터베이스가 필요합니다.
+    오늘은 이 역할을 GitHub 기능으로 나눠 맡깁니다.
+  </p>
+  <table>
+    <thead><tr><th>보통 서비스의 구성 요소</th><th>오늘 대신 쓰는 것</th><th>차이점</th></tr></thead>
+    <tbody>
+      <tr><td>업로드 화면 + API</td><td>Issues (파일 첨부)</td><td>GitHub 로그인·권한 확인을 GitHub이 대신 해 줌</td></tr>
+      <tr><td>항상 켜진 처리 서버</td><td>Actions runner</td><td>일이 있을 때만 새 VM이 켜지고, 끝나면 삭제됨</td></tr>
+      <tr><td>데이터베이스</td><td>Git 커밋 (<code>docs</code> 브랜치의 <code>data.json</code>)</td><td>변경 이력이 자동으로 남지만, 검색·동시 수정에는 약함</td></tr>
+      <tr><td>웹 서버</td><td>GitHub Pages</td><td>파일만 내려줄 수 있음 → 진짜 로그인 불가 (<a href="#/limits">한계 장</a>)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>runner는 진짜 컴퓨터예요</h3>
+  <p>
+    이슈를 등록하면 GitHub은 클라우드에 <b>방금 설치를 마친 깨끗한 Windows 서버</b>를 한 대 만들어, 여러분 저장소의 코드를 내려받고
+    워크플로우에 적힌 명령(파이썬 설치, 엑셀 변환, git push…)을 <b>실제로 실행</b>합니다. 일이 끝나면 그 서버는 통째로 폐기돼요.
+    그래서 다음 실행 때는 이전 실행의 파일이 하나도 남아 있지 않고, 남기고 싶은 결과는 반드시 <b>커밋</b> 같은 방법으로 저장소에 보내야 합니다.
+  </p>
+
+  <h3>데이터가 흘러가는 순서</h3>
+  <ol>
+    <li>사람이 이슈에 엑셀을 첨부해 등록 → GitHub에 <code>issues: opened</code> 이벤트 발생</li>
+    <li>이벤트에 맞는 워크플로우가 깨어나고, GitHub이 Windows runner(VM)를 새로 준비</li>
+    <li>runner가 첨부 파일을 내려받아 xlwings(안 되면 openpyxl)로 읽고 <code>data.json</code> 생성</li>
+    <li>봇 계정(<code>github-actions[bot]</code>)이 <code>docs</code> 브랜치에 커밋·push</li>
+    <li>이어지는 deploy job이 <code>docs</code> 브랜치 내용을 Pages에 배포 → 브라우저가 <code>data.json</code>을 내려받아 차트로 그림</li>
+  </ol>
+
+  <div class="theory-check"><b>✅ 실습 전 셀프 체크</b>
+    <ul>
+      <li>"runner는 어디에 있는 어떤 컴퓨터이고, 일이 끝나면 어떻게 되는지" 설명할 수 있나요?</li>
+      <li>이 서비스에 "항상 켜진 서버"가 없는데도 동작하는 이유를 말할 수 있나요?</li>
+      <li><code>main</code>과 <code>docs</code> 브랜치에 각각 무엇이 들어가는지 구분할 수 있나요?</li>
+    </ul>
+  </div>
+</section>
+
 <h2>전체 구조</h2>
 <figure class="diagram">
-  <svg viewBox="0 0 760 330" role="img" aria-label="사용자가 이슈에 엑셀을 올리면 Actions Windows runner가 xlwings로 변환해 docs 브랜치에 커밋하고 Pages가 대시보드를 서빙하는 구조도">
+  <svg viewBox="0 0 760 330" role="img" aria-label="사용자가 이슈에 엑셀을 올리면 GitHub이 클라우드에 새로 만든 실제 Windows 서버(runner)가 xlwings로 변환해 docs 브랜치에 커밋하고 Pages가 대시보드를 서빙하는 구조도">
     <defs>
       <marker id="pa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="var(--ink-2)" /></marker>
     </defs>
@@ -22,7 +76,7 @@
     <text x="360" y="76" text-anchor="middle" font-weight="800">② GitHub Actions</text>
     <text x="360" y="96" text-anchor="middle" class="d-sub">workflow: excel-to-dashboard.yml</text>
     <rect x="250" y="108" width="220" height="108" rx="10" fill="var(--bg-elev)" stroke="var(--line-strong)" />
-    <text x="262" y="130" font-size="13" font-weight="700">🪟 Windows runner (가상 PC)</text>
+    <text x="262" y="130" font-size="12.5" font-weight="700">🪟 Windows runner (실제 VM)</text>
     <text x="262" y="152" font-size="12.5" class="d-mono">1. 첨부 엑셀 다운로드</text>
     <text x="262" y="172" font-size="12.5" class="d-mono">2. xlwings로 읽기</text>
     <text x="262" y="192" font-size="12.5" class="d-mono">3. data.json 생성</text>
@@ -84,6 +138,7 @@
 │   ├── workflows/
 │   │   ├── excel-to-dashboard.yml        ← 이슈 → 변환 → docs 브랜치 (Windows)
 │   │   ├── deploy-dashboard.yml          ← 화면 코드 변경 시 재배포 (Linux)
+│   │   ├── pages-deploy.yml              ← docs 브랜치 → Pages 배포 (위 두 워크플로우가 호출)
 │   │   └── ai-review.yml                 ← PR 자동 코드 리뷰 (Linux)
 │   └── review-prompt.md
 ├── scripts/

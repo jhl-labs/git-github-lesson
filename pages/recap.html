@@ -1,0 +1,102 @@
+<h1>실습 돌아보기</h1>
+<p class="lede">
+  여기까지 왔다면 엑셀 한 장이 <strong>진짜 GitHub 위에서</strong> 이슈 → 자동화 → 커밋 → 웹 대시보드로 흘러가는 서비스를 직접 만든 거예요.
+  무엇을 했고, 무엇을 배웠는지 한 페이지로 정리해 봅시다.
+</p>
+
+<h2>한 번의 업로드에서 실제로 일어난 일</h2>
+<p>Step 5에서 이슈 하나를 등록했을 때, 화면 뒤에서는 아래 일들이 순서대로 일어났습니다.</p>
+<ol class="steps">
+  <li><strong>이슈 등록</strong> 이슈 폼에 엑셀을 끌어다 놓자 GitHub이 파일을 보관하고, 본문에 <code>user-attachments</code> 첨부 링크를 넣었어요.</li>
+  <li><strong>이벤트 발생</strong> GitHub이 <code>issues: opened</code> 이벤트와 이슈 정보(JSON 페이로드)를 만들어, <code>on: issues</code>로 기다리던 워크플로우를 깨웠어요.</li>
+  <li><strong>조건 확인</strong> job의 <code>if:</code>가 제목의 <code>[EXCEL]</code>과 작성자의 <code>author_association</code>을 검사해 "실행해도 되는 요청"인지 걸렀어요.</li>
+  <li><strong>실제 Windows 서버 준비</strong> GitHub이 클라우드에 이 job 전용 Windows Server VM을 새로 만들고, <code>actions/checkout</code>으로 저장소 코드를 내려받았어요.</li>
+  <li><strong>엑셀 읽기</strong> 그 서버에서 파이썬이 첨부 파일을 내려받아 검사(도메인·크기·ZIP 서명)한 뒤, xlwings를 시도하고 Excel이 없어 openpyxl로 대체해 읽었어요.</li>
+  <li><strong>JSON 생성</strong> 행·열·타입·합계를 담은 <code>build/data.json</code>을 만들었어요.</li>
+  <li><strong>봇 커밋</strong> <code>github-actions[bot]</code>이 GITHUB_TOKEN으로 <code>docs</code> 브랜치에 <code>data/data.json</code>을 커밋·push하고, 이슈에 결과 댓글을 단 뒤 닫았어요. job이 끝나자 VM은 폐기됐어요.</li>
+  <li><strong>Pages 배포</strong> 같은 실행의 deploy job이 <code>pages-deploy.yml</code>을 불러 <code>docs</code> 브랜치 내용을 GitHub Pages에 배포했어요. (봇이 GITHUB_TOKEN으로 push한 커밋은 Pages 빌드를 스스로 시작하지 않기 때문)</li>
+  <li><strong>브라우저</strong> 팀원이 주소에 접속하면 브라우저가 HTML·JS를 받고, <code>fetch()</code>로 <code>data.json</code>을 가져와 차트와 표를 그렸어요.</li>
+  <li><strong>로그인 화면</strong> 입력한 비밀번호를 브라우저에서 SHA-256으로 해시해 비교하고, 맞으면 sessionStorage에 표시해 대시보드를 보여줬어요. (화면만 가리는 학습용 장치!)</li>
+</ol>
+
+<h2>Step별 정리</h2>
+<table>
+  <thead><tr><th>Step</th><th>한 일</th><th>만든 결과물</th><th>배운 개념</th></tr></thead>
+  <tbody>
+    <tr><td>PART 1 · Git 실습실</td><td>브라우저 안 실습실에서 Git 명령을 직접 쳐 보며 미션 수행</td><td>(연습용 저장소)</td><td>작업 디렉터리·스테이징·저장소·원격, 브랜치와 병합, 충돌 해결, clone, 되돌리기</td></tr>
+    <tr><td>Step 1 · 저장소와 Claude Code</td><td>GitHub에 Public 저장소를 만들고 clone, Claude Code로 프로젝트 설명서 작성</td><td><code>CLAUDE.md</code>, 첫 push</td><td>Git vs GitHub, origin, 인증(gh·토큰·SSH), Public/Private, Claude Code의 작업 방식</td></tr>
+    <tr><td>Step 2 · 변환기</td><td>엑셀을 JSON으로 바꾸는 스크립트와 테스트 작성, 기능 브랜치에서 작업 후 merge</td><td><code>scripts/excel_to_json.py</code>, <code>tests/</code>, <code>requirements.txt</code></td><td>.xlsx 구조, JSON 타입, xlwings vs openpyxl, 수식·날짜 함정, venv·pytest</td></tr>
+    <tr><td>Step 3 · Actions</td><td>이슈 폼과 이슈 → 변환 → 배포 워크플로우 작성, 라벨·권한 설정</td><td><code>excel-to-dashboard.yml</code>, 이슈 템플릿, <code>fetch_attachment.py</code>, <code>publish_docs.sh</code></td><td>event·job·step·runner, 실제 VM의 일회성, YAML, <code>${{ }}</code>, permissions, 인젝션 방어</td></tr>
+    <tr><td>Step 4 · Pages</td><td>비밀번호 화면이 있는 정적 대시보드를 만들고, Pages Source를 GitHub Actions로 켜서 <code>docs</code> 브랜치 내용을 배포</td><td><code>dashboard/</code>, <code>deploy-dashboard.yml</code>, <code>pages-deploy.yml</code>, Pages 사이트</td><td>정적 호스팅, fetch, 해시 ≠ 암호화, sessionStorage, orphan 브랜치·worktree, CDN 캐시</td></tr>
+    <tr><td>Step 5 · 전체 실행</td><td>이슈로 엑셀을 올리고 Actions 로그를 따라가며 결과 확인·문제 해결</td><td><code>docs</code>의 데이터 커밋, 동작하는 대시보드</td><td>이슈 폼 → 마크다운, 이벤트 페이로드, 로그·annotation, Re-run의 함정, 멱등성·concurrency</td></tr>
+    <tr><td>Step 6 · PR과 AI 리뷰</td><td>기능 브랜치로 PR을 열고 AI 에이전트로 리뷰, 자동 리뷰 워크플로우 추가 후 squash merge</td><td>PR, 리뷰 댓글, <code>ai-review.yml</code></td><td>PR·diff·리뷰 상태, merge 방법 3가지, 브랜치 보호, headless <code>claude -p</code>, AI 리뷰의 한계</td></tr>
+  </tbody>
+</table>
+
+<h2>GitHub 기능이 이 프로젝트에서 맡은 역할</h2>
+<div class="cards">
+  <div class="card card-remote"><span class="card-icon">📁</span><h3>Repository</h3><p>소스 코드(<code>main</code>)와 배포 결과물(<code>docs</code>)을 브랜치로 나눠 보관. 데이터 변경 이력도 커밋으로 남았어요.</p></div>
+  <div class="card card-work"><span class="card-icon">🐛</span><h3>Issues</h3><p>엑셀 업로드 창구이자 자동화의 방아쇠. 결과 알림(봇 댓글)도 여기로 돌아왔어요.</p></div>
+  <div class="card card-repo"><span class="card-icon">⚙️</span><h3>Actions</h3><p>이벤트가 생길 때만 실제 서버를 띄워 변환·배포·리뷰를 실행한 일꾼.</p></div>
+  <div class="card card-remote"><span class="card-icon">🌐</span><h3>Pages</h3><p><code>docs</code> 브랜치의 파일을 HTTPS 웹사이트로 공개한 정적 호스팅.</p></div>
+  <div class="card card-stage"><span class="card-icon">🔀</span><h3>Pull Request</h3><p>합치기 전에 diff를 보여주고 사람·AI 리뷰를 받는 관문.</p></div>
+  <div class="card card-work"><span class="card-icon">🔑</span><h3>Secrets · GITHUB_TOKEN</h3><p>API 키는 Secret으로, 저장소 쓰기는 최소 권한의 임시 토큰으로 처리했어요.</p></div>
+</div>
+
+<h2>실제로 쓴 명령어</h2>
+<table>
+  <thead><tr><th>명령</th><th>어디서 / 왜</th></tr></thead>
+  <tbody>
+    <tr><td><code>gh repo create</code> · <code>git clone</code></td><td>Step 1 — 저장소를 만들고 내 컴퓨터로 복사</td></tr>
+    <tr><td><code>git remote -v</code></td><td>Step 1 — <code>origin</code>이 GitHub 주소로 연결됐는지 확인</td></tr>
+    <tr><td><code>git status</code> · <code>git add</code> · <code>git commit</code> · <code>git push</code></td><td>모든 Step — 변경 확인 → 스테이징 → 기록 → GitHub에 올리기</td></tr>
+    <tr><td><code>git switch -c feature/…</code></td><td>Step 2·3·4·6 — 기능마다 브랜치를 만들어 main을 안전하게 유지</td></tr>
+    <tr><td><code>git switch main</code> · <code>git merge</code></td><td>Step 2·3·4 — 혼자 작업할 때 기능 브랜치를 main에 합치기</td></tr>
+    <tr><td><code>git pull</code></td><td>Step 6 — PR merge 결과를 내 컴퓨터로 가져오기</td></tr>
+    <tr><td><code>git fetch</code> · <code>git log --oneline origin/docs</code> · <code>git show --stat</code></td><td>Step 5 — 봇이 만든 <code>docs</code> 커밋 확인</td></tr>
+    <tr><td><code>git checkout --orphan</code> · <code>git worktree add</code> · <code>git ls-remote</code></td><td>Step 3·4 — 배포 스크립트가 runner 위에서 <code>docs</code> 브랜치를 만들고 고칠 때 (봇이 실행)</td></tr>
+    <tr><td><code>gh label create</code> · <code>gh run list/watch/view</code></td><td>Step 3·5 — 이슈 라벨 준비, 워크플로우 실행 지켜보기·실패 로그 읽기</td></tr>
+    <tr><td><code>gh pr create/diff/comment/merge/close</code> · <code>gh secret set</code></td><td>Step 6 — PR 열기, diff를 AI에게 넘기기, 리뷰 댓글, squash merge, API 키 등록</td></tr>
+  </tbody>
+</table>
+
+<h2>바이브 코딩, 이렇게 했어요</h2>
+<ol class="steps">
+  <li><strong>프롬프트</strong> 목표 · 입력/출력 형식 · 설계 · 보안 규칙 · 테스트까지 구체적으로 적었어요. 공통 규칙은 <code>CLAUDE.md</code>에 한 번만.</li>
+  <li><strong>diff 리뷰</strong> Claude가 바꾼 내용을 읽고, <code>innerHTML</code>·<code>${{ }}</code> 직접 삽입 같은 위험 신호를 확인했어요.</li>
+  <li><strong>실행</strong> 테스트(<code>pytest</code>)·로컬 서버·실제 이슈 업로드로 "진짜 동작하는지" 확인했어요. 실패하면 로그를 그대로 AI에게 보여줬죠.</li>
+  <li><strong>커밋</strong> 확인이 끝난 단위마다 커밋해 언제든 돌아갈 지점을 만들었어요. 협업이 필요한 변경은 PR로.</li>
+</ol>
+<div class="callout callout-vibe">
+  <span class="callout-title">✦ 핵심 한 줄</span>
+  AI가 코드를 <b>쓰는</b> 속도는 빨라졌지만, 무엇을 만들지 정하고 결과가 맞는지 <b>판단하는</b> 일은 여전히 사람의 몫이에요. 오늘 배운 이론이 그 판단의 기준입니다.
+</div>
+
+<h2>셀프 체크</h2>
+<p>아래 항목을 다른 사람에게 말로 설명할 수 있다면 체크하세요.</p>
+<ul class="checklist" data-checklist="recap-self">
+  <li>Git과 GitHub의 차이, 그리고 <code>commit</code>과 <code>push</code>의 차이</li>
+  <li>GitHub-hosted runner가 어디서 어떻게 만들어지고, job이 끝나면 어떻게 되는지</li>
+  <li>워크플로우의 event · job · step · runner의 관계</li>
+  <li>이슈 제목·본문을 <code>run:</code>에 직접 넣으면 안 되는 이유와 안전한 전달 방법</li>
+  <li><code>permissions:</code>와 GITHUB_TOKEN, Secret의 역할</li>
+  <li>xlwings와 openpyxl의 차이, runner에서 openpyxl로 대체된 이유</li>
+  <li><code>main</code>과 <code>docs</code> 브랜치를 나눈 이유</li>
+  <li>GitHub Pages가 "정적" 호스팅이라는 말의 의미</li>
+  <li>비밀번호 화면이 진짜 보안이 아닌 이유 (해시 ≠ 암호화, <code>data.json</code> 직접 접근)</li>
+  <li>PR의 흐름과 squash merge의 결과</li>
+  <li>AI 코드 리뷰의 장점과 한계</li>
+</ul>
+
+<h2>다음으로</h2>
+<p>
+  오늘 만든 서비스는 원리를 배우기에는 좋지만, 그대로 실무에 쓰기에는 분명한 약점이 있어요. 공개 저장소의 데이터 노출, 흉내뿐인 로그인,
+  Windows runner의 느린 속도와 Excel 부재… 이 문제들을 <a href="#/limits">한계와 다음 단계</a>에서 하나씩 짚어 봅니다.
+</p>
+<p>더 깊이 알고 싶다면 PART 3 참고 자료로 이어가세요.</p>
+<div class="cards">
+  <a class="card card-repo" href="#/expert-git"><span class="card-icon">🌳</span><h3>Git 심화</h3><p>객체 모델, ref·HEAD, 병합과 rebase의 내부, 되돌리기</p></a>
+  <a class="card card-remote" href="#/expert-github"><span class="card-icon">🐙</span><h3>GitHub 심화</h3><p>협업·권한·저장소 관리 기능 더 알아보기</p></a>
+  <a class="card card-stage" href="#/expert-actions"><span class="card-icon">⚙️</span><h3>Actions 심화</h3><p>트리거, job 설계, 캐시·artifact, 재사용, 보안 강화</p></a>
+  <a class="card card-work" href="#/expert-pages"><span class="card-icon">🌐</span><h3>Pages 심화</h3><p>배포 방식, 주소와 도메인, 캐시와 제약</p></a>
+</div>
